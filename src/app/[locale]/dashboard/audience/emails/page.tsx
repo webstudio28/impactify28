@@ -1,12 +1,14 @@
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
-import { PhonesAudienceClient } from "./ui";
+import { EmailsAudienceClient } from "./ui";
 
-export default async function PhonesAudiencePage() {
+export default async function EmailsAudiencePage() {
+  const t = await getTranslations("emails");
   const supabase = await createClient();
   const { data: audiences } = await supabase
     .from("audiences")
     .select("id, name, created_at")
-    .eq("audience_type", "phone")
+    .eq("audience_type", "email")
     .order("created_at", { ascending: false });
 
   const withCounts = await Promise.all(
@@ -22,10 +24,10 @@ export default async function PhonesAudiencePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Phone numbers</h1>
-        <p className="mt-1 text-sm text-ink-muted">E.164 recommended (e.g. +15551234567). Used for SMS campaigns.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+        <p className="mt-1 text-sm text-ink-muted">{t("subtitle")}</p>
       </div>
-      <PhonesAudienceClient initialAudiences={withCounts} />
+      <EmailsAudienceClient initialAudiences={withCounts} />
     </div>
   );
 }

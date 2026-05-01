@@ -1,5 +1,9 @@
+import createMiddleware from "next-intl/middleware";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
+import { routing } from "./i18n/routing";
+
+const intlMiddleware = createMiddleware(routing);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey =
@@ -11,18 +15,17 @@ function safeInternalPath(raw: string | null): string {
   return raw;
 }
 
-/**
- * Cookie refresh + auth gates (aligned with Guestcap `proxy.ts` behaviour).
- */
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  if (pathname.startsWith("/api/cron")) {
-    return NextResponse.next();
+function stripLocalePrefix(pathname: string): { locale: string | null; path: string } {
+  const segs = pathname.split("/").filter(Boolean);
+  const first = segs[0];
+  if (first && routing.locales.includes(first as "en" | "bg")) {
+    const rest = segs.slice(1);
+    return { locale: first, path: rest.length ? `/${rest.join("/")}` : "/" };
   }
+  return { locale: null, path: pathname };
+}
 
-  let response = NextResponse.next({ request });
-
+async function refreshSupabaseSession(request: NextRequest, response: NextResponse) {
   if (!supabaseUrl?.trim() || !supabaseKey?.trim()) {
     return response;
   }
@@ -44,11 +47,16 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
-  const isDashboard = pathname.startsWith("/dashboard");
+  const pathname = request.nextUrl.pathname;
+  const { locale, path: pathWithoutLocale } = stripLocalePrefix(pathname);
+
+  const isAuthPage = pathWithoutLocale === "/login" || pathWithoutLocale === "/signup";
+  const isDashboard =
+    pathWithoutLocale === "/dashboard" || pathWithoutLocale.startsWith("/dashboard/");
 
   if (isDashboard && !user) {
-    const loginUrl = new URL("/login", request.url);
+    const loc = locale ?? routing.defaultLocale;
+    const loginUrl = new URL(`/${loc}/login`, request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -63,8 +71,27 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  if (pathname.startsWith("/api/cron")) {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api")) {
+    let response = NextResponse.next({ request });
+    return refreshSupabaseSession(request, response);
+  }
+
+  if (pathname.startsWith("/auth")) {
+    let response = NextResponse.next({ request });
+    return refreshSupabaseSession(request, response);
+  }
+
+  const response = intlMiddleware(request);
+  return refreshSupabaseSession(request, response);
+}
+
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/", "/(bg|en)/:path*", "/((?!_next|_vercel|.*\\..*).*)"],
 };

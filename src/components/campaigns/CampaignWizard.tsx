@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { Link, useRouter } from "@/i18n/navigation";
 
 type Audience = { id: string; name: string; audience_type: string };
 
@@ -30,6 +31,7 @@ function StepIndicator({ step }: { step: number }) {
 }
 
 export function CampaignWizard() {
+  const t = useTranslations("wizard");
   const router = useRouter();
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id");
@@ -48,38 +50,46 @@ export function CampaignWizard() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const loadCampaign = useCallback(async (id: string) => {
-    const res = await fetch(`/api/campaigns/${id}`);
-    if (!res.ok) throw new Error("Could not load campaign");
-    const data = (await res.json()) as {
-      campaign: {
-        name: string;
-        audience_id: string | null;
-        send_immediately: boolean;
-        scheduled_at: string | null;
+  const loadCampaign = useCallback(
+    async (id: string) => {
+      const res = await fetch(`/api/campaigns/${id}`);
+      if (!res.ok) throw new Error(t("loadFailed"));
+      const data = (await res.json()) as {
+        campaign: {
+          name: string;
+          audience_id: string | null;
+          send_immediately: boolean;
+          scheduled_at: string | null;
+        };
+        steps: {
+          step_order: number;
+          body: string;
+          link_url: string | null;
+          delay_after_previous_hours: number;
+        }[];
       };
-      steps: { step_order: number; body: string; link_url: string | null; delay_after_previous_hours: number }[];
-    };
-    setName(data.campaign.name);
-    setAudienceId(data.campaign.audience_id ?? "");
-    setSendNow(Boolean(data.campaign.send_immediately));
-    if (data.campaign.scheduled_at) {
-      const d = new Date(data.campaign.scheduled_at);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      setScheduledLocal(
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-      );
-    }
-    if (data.steps?.length) {
-      setSteps(
-        data.steps.map((s) => ({
-          body: s.body,
-          link_url: s.link_url ?? "",
-          delay_after_previous_hours: s.delay_after_previous_hours ?? 0,
-        }))
-      );
-    }
-  }, []);
+      setName(data.campaign.name);
+      setAudienceId(data.campaign.audience_id ?? "");
+      setSendNow(Boolean(data.campaign.send_immediately));
+      if (data.campaign.scheduled_at) {
+        const d = new Date(data.campaign.scheduled_at);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        setScheduledLocal(
+          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+        );
+      }
+      if (data.steps?.length) {
+        setSteps(
+          data.steps.map((s) => ({
+            body: s.body,
+            link_url: s.link_url ?? "",
+            delay_after_previous_hours: s.delay_after_previous_hours ?? 0,
+          }))
+        );
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
     setHydrated(true);
@@ -95,7 +105,7 @@ export function CampaignWizard() {
       try {
         await loadCampaign(campaignId);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Load failed");
+        if (!cancelled) setError(e instanceof Error ? e.message : t("loadFailed"));
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -104,7 +114,7 @@ export function CampaignWizard() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, idParam, loadCampaign]);
+  }, [hydrated, idParam, loadCampaign, t]);
 
   useEffect(() => {
     if (step !== 2 && step !== 5) return;
@@ -139,7 +149,7 @@ export function CampaignWizard() {
       body: JSON.stringify(body),
     });
     const json = (await res.json()) as { error?: string };
-    if (!res.ok) throw new Error(json.error ?? "Save failed");
+    if (!res.ok) throw new Error(json.error ?? t("saveFailed"));
   }
 
   async function saveSteps() {
@@ -158,7 +168,7 @@ export function CampaignWizard() {
       body: JSON.stringify(payload),
     });
     const json = (await res.json()) as { error?: string };
-    if (!res.ok) throw new Error(json.error ?? "Could not save messages");
+    if (!res.ok) throw new Error(json.error ?? t("saveMessagesFailed"));
   }
 
   async function goNext() {
@@ -167,22 +177,22 @@ export function CampaignWizard() {
     setBusy(true);
     try {
       if (step === 1) {
-        if (!name.trim()) throw new Error("Campaign name is required");
+        if (!name.trim()) throw new Error(t("nameRequired"));
         await patchCampaign({ name: name.trim() });
       }
       if (step === 2) {
-        if (!audienceId) throw new Error("Select a phone audience");
+        if (!audienceId) throw new Error(t("selectAudience"));
         await patchCampaign({ audience_id: audienceId });
       }
       if (step === 3) {
         const valid = steps.some((s) => s.body.trim() || s.link_url.trim());
-        if (!valid) throw new Error("Add message text or a link for at least one step");
+        if (!valid) throw new Error(t("addMessage"));
         await saveSteps();
       }
       if (step === 4) {
         let scheduled_at: string | null = null;
         if (!sendNow) {
-          if (!scheduledLocal) throw new Error("Pick a date and time");
+          if (!scheduledLocal) throw new Error(t("pickDateTime"));
           scheduled_at = new Date(scheduledLocal).toISOString();
         }
         await patchCampaign({
@@ -192,7 +202,7 @@ export function CampaignWizard() {
       }
       setStep((s) => Math.min(5, s + 1));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : t("errorGeneric"));
     } finally {
       setBusy(false);
     }
@@ -210,7 +220,7 @@ export function CampaignWizard() {
     try {
       const res = await fetch(`/api/campaigns/${idParam}/finalize`, { method: "POST" });
       const json = (await res.json()) as { error?: string; ok?: boolean };
-      if (!res.ok) throw new Error(json.error ?? "Could not create campaign");
+      if (!res.ok) throw new Error(json.error ?? t("finalizeFailed"));
       try {
         await fetch("/api/sms/process", { method: "POST" });
       } catch {
@@ -219,7 +229,7 @@ export function CampaignWizard() {
       router.push("/dashboard/campaigns");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Finalize failed");
+      setError(e instanceof Error ? e.message : t("finalizeError"));
     } finally {
       setBusy(false);
     }
@@ -228,9 +238,9 @@ export function CampaignWizard() {
   if (!idParam) {
     return (
       <div className="mx-auto max-w-xl text-sm text-ink-muted">
-        Missing campaign.{" "}
+        {t("missingCampaign")}{" "}
         <Link href="/dashboard/campaigns/new" className="text-accent hover:text-accent-hover">
-          Start again
+          {t("startAgain")}
         </Link>
         .
       </div>
@@ -240,7 +250,7 @@ export function CampaignWizard() {
   if (busy && step === 1 && !name) {
     return (
       <div className="mx-auto max-w-xl space-y-4">
-        <p className="text-sm text-ink-muted">Loading campaign…</p>
+        <p className="text-sm text-ink-muted">{t("loadingCampaign")}</p>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </div>
     );
@@ -251,9 +261,9 @@ export function CampaignWizard() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <Link href="/dashboard/campaigns" className="text-sm text-ink-muted hover:text-ink">
-            ← Campaigns
+            {t("backCampaigns")}
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">New campaign</h1>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t("title")}</h1>
         </div>
         <StepIndicator step={step} />
       </div>
@@ -262,27 +272,27 @@ export function CampaignWizard() {
 
       {step === 1 && (
         <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-ink">Step 1 — Name</h2>
-          <label className="block text-sm text-ink-muted">Campaign name</label>
+          <h2 className="text-sm font-semibold text-ink">{t("step1Title")}</h2>
+          <label className="block text-sm text-ink-muted">{t("campaignName")}</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-            placeholder="Spring launch SMS"
+            placeholder={t("namePlaceholder")}
           />
         </div>
       )}
 
       {step === 2 && (
         <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-ink">Step 2 — Audience</h2>
-          <p className="text-sm text-ink-muted">Choose a phone list. Upload or create lists under Audience.</p>
+          <h2 className="text-sm font-semibold text-ink">{t("step2Title")}</h2>
+          <p className="text-sm text-ink-muted">{t("step2Hint")}</p>
           <select
             value={audienceId}
             onChange={(e) => setAudienceId(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
           >
-            <option value="">Select…</option>
+            <option value="">{t("selectAudiencePlaceholder")}</option>
             {audiences.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -290,7 +300,7 @@ export function CampaignWizard() {
             ))}
           </select>
           <Link href="/dashboard/audience/phones" className="inline-block text-sm font-medium text-accent hover:text-accent-hover">
-            Manage phone lists →
+            {t("managePhones")}
           </Link>
         </div>
       )}
@@ -298,7 +308,7 @@ export function CampaignWizard() {
       {step === 3 && (
         <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-ink">Step 3 — Messages</h2>
+            <h2 className="text-sm font-semibold text-ink">{t("step3Title")}</h2>
             <button
               type="button"
               onClick={() =>
@@ -306,14 +316,16 @@ export function CampaignWizard() {
               }
               className="text-sm font-medium text-accent hover:text-accent-hover"
             >
-              + Add step
+              {t("addStep")}
             </button>
           </div>
           {steps.map((s, idx) => (
             <div key={idx} className="space-y-3 border-t border-zinc-100 pt-4 first:border-t-0 first:pt-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">SMS {idx + 1}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                {t("smsLabel", { n: idx + 1 })}
+              </p>
               <div>
-                <label className="text-xs text-ink-muted">Message</label>
+                <label className="text-xs text-ink-muted">{t("message")}</label>
                 <textarea
                   value={s.body}
                   onChange={(e) => {
@@ -322,14 +334,14 @@ export function CampaignWizard() {
                   }}
                   rows={4}
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-                  placeholder="Short, clear copy. Include opt-out language where required."
+                  placeholder={t("messagePlaceholder")}
                 />
                 <p className="mt-1 text-xs text-ink-muted">
-                  Approx. chars (this step): {s.body.length} / {SMS_HINT} (simple counter; link adds more when sent).
+                  {t("charsHint", { count: s.body.length, max: SMS_HINT })}
                 </p>
               </div>
               <div>
-                <label className="text-xs text-ink-muted">Link (optional)</label>
+                <label className="text-xs text-ink-muted">{t("linkOptional")}</label>
                 <input
                   value={s.link_url}
                   onChange={(e) => {
@@ -337,12 +349,12 @@ export function CampaignWizard() {
                     setSteps((prev) => prev.map((p, i) => (i === idx ? { ...p, link_url: v } : p)));
                   }}
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-                  placeholder="https://yourshop.com/product"
+                  placeholder={t("linkPlaceholder")}
                 />
               </div>
               <div>
                 <label className="text-xs text-ink-muted">
-                  {idx === 0 ? "Delay after campaign start (hours)" : "Delay after previous step (hours)"}
+                  {idx === 0 ? t("delayFirst") : t("delayAfter")}
                 </label>
                 <input
                   type="number"
@@ -361,7 +373,7 @@ export function CampaignWizard() {
                   onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
                   className="text-xs text-red-600 hover:underline"
                 >
-                  Remove step
+                  {t("removeStep")}
                 </button>
               ) : null}
             </div>
@@ -371,14 +383,14 @@ export function CampaignWizard() {
 
       {step === 4 && (
         <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-ink">Step 4 — Timing</h2>
+          <h2 className="text-sm font-semibold text-ink">{t("step4Title")}</h2>
           <label className="flex items-center gap-2 text-sm">
             <input type="radio" checked={sendNow} onChange={() => setSendNow(true)} />
-            Start now (queue sends when you finish)
+            {t("startNow")}
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="radio" checked={!sendNow} onChange={() => setSendNow(false)} />
-            Schedule for later
+            {t("scheduleLater")}
           </label>
           {!sendNow ? (
             <input
@@ -393,31 +405,28 @@ export function CampaignWizard() {
 
       {step === 5 && (
         <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-ink">Step 5 — Review</h2>
+          <h2 className="text-sm font-semibold text-ink">{t("step5Title")}</h2>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-muted">Name</dt>
+              <dt className="text-ink-muted">{t("reviewName")}</dt>
               <dd className="font-medium text-ink">{name}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-muted">Audience</dt>
-              <dd className="font-medium text-ink">{audienceLabel || audienceId || "—"}</dd>
+              <dt className="text-ink-muted">{t("reviewAudience")}</dt>
+              <dd className="font-medium text-ink">{audienceLabel || audienceId || t("dash")}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-muted">Steps</dt>
-              <dd className="text-right font-medium text-ink">{steps.length} SMS</dd>
+              <dt className="text-ink-muted">{t("reviewSteps")}</dt>
+              <dd className="text-right font-medium text-ink">{t("smsCount", { count: steps.length })}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-muted">Timing</dt>
+              <dt className="text-ink-muted">{t("reviewTiming")}</dt>
               <dd className="text-right font-medium text-ink">
-                {sendNow ? "Start now" : scheduledLocal ? new Date(scheduledLocal).toLocaleString() : "—"}
+                {sendNow ? t("timingNow") : scheduledLocal ? new Date(scheduledLocal).toLocaleString() : t("dash")}
               </dd>
             </div>
           </dl>
-          <p className="text-xs text-ink-muted">
-            Compliance: ensure recipients have opted in to SMS marketing. This MVP does not manage legal consent for
-            you.
-          </p>
+          <p className="text-xs text-ink-muted">{t("compliance")}</p>
         </div>
       )}
 
@@ -428,7 +437,7 @@ export function CampaignWizard() {
           disabled={step === 1 || busy}
           className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink disabled:opacity-40"
         >
-          Back
+          {t("back")}
         </button>
         {step < 5 ? (
           <button
@@ -437,7 +446,7 @@ export function CampaignWizard() {
             disabled={busy}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
           >
-            {busy ? "Saving…" : "Next"}
+            {busy ? t("saving") : t("next")}
           </button>
         ) : (
           <button
@@ -446,7 +455,7 @@ export function CampaignWizard() {
             disabled={busy}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
           >
-            {busy ? "Creating…" : "Create campaign"}
+            {busy ? t("creating") : t("createCampaign")}
           </button>
         )}
       </div>

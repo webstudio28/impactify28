@@ -88,7 +88,9 @@ export async function POST(_req: Request, ctx: Ctx) {
   const { error: upErr } = await supabase
     .from("campaigns")
     .update({
-      status: "queued",
+      status: "running",
+      send_rate_minute: null,
+      send_rate_count: 0,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

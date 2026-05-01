@@ -4,7 +4,18 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { OAUTH_NEXT_KEY } from "@/lib/auth/google";
+
 const exchangeKeyFor = (code: string) => `impact28_oauth_exchanged_${code}`;
+
+function localeFromNextPath(path: string): string {
+  const m = path.match(/^\/(en|bg)(\/|$)/);
+  return m?.[1] ?? "en";
+}
+
+function loginPath(pathForLocale: string, error?: boolean) {
+  const base = `/${localeFromNextPath(pathForLocale)}/login`;
+  return error ? `${base}?error=auth` : base;
+}
 
 function AuthCallbackHandler() {
   const router = useRouter();
@@ -20,16 +31,16 @@ function AuthCallbackHandler() {
     const next =
       (nextParam?.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null) ??
       (storedNext?.startsWith("/") && !storedNext.startsWith("//") ? storedNext : null) ??
-      "/dashboard";
+      "/en/dashboard";
     const errorParam = searchParams.get("error");
 
     if (errorParam) {
-      router.replace("/login?error=auth");
+      router.replace(loginPath(next, true));
       return;
     }
 
     if (!code) {
-      router.replace("/login");
+      router.replace(loginPath(next));
       return;
     }
 
@@ -80,7 +91,7 @@ function AuthCallbackHandler() {
         if (!cancelled) {
           console.error("[auth/callback]", msg);
           setStatus("error");
-          router.replace("/login?error=auth");
+          router.replace(loginPath(next, true));
         }
         return;
       }

@@ -8,7 +8,10 @@ export async function startGoogleOAuth(redirectPath: string): Promise<{ error: s
     if (typeof window !== "undefined") {
       sessionStorage.setItem(OAUTH_NEXT_KEY, redirectPath);
     }
-    const callbackUrl = buildAuthCallbackUrl(redirectPath);
+    const callbackUrl = buildAuthCallbackUrl(
+      redirectPath,
+      typeof window !== "undefined" ? window.location.pathname : undefined
+    );
     if (!callbackUrl) {
       return { error: "Could not build sign-in URL. Try again." };
     }

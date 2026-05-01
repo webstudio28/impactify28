@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type Row = { id: string; name: string; created_at: string; count: number };
 
-export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: Row[] }) {
+export function PhonesAudienceClient({ initialAudiences }: { initialAudiences: Row[] }) {
+  const t = useTranslations("phones");
   const [audiences, setAudiences] = useState(initialAudiences);
   const [selectedId, setSelectedId] = useState(initialAudiences[0]?.id ?? "");
   const [newListName, setNewListName] = useState("");
@@ -19,7 +21,7 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
     setError(null);
     setMessage(null);
     if (!newListName.trim()) {
-      setError("Name your list first");
+      setError(t("nameListFirst"));
       return;
     }
     setBusy(true);
@@ -27,41 +29,45 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
       const res = await fetch("/api/audiences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newListName.trim(), audience_type: "email" }),
+        body: JSON.stringify({ name: newListName.trim(), audience_type: "phone" }),
       });
       const json = (await res.json()) as {
-        audience?: { id: string; name: string; created_at: string };
+        audience?: { id: string; name: string; created_at: string; audience_type: string };
         error?: string;
       };
-      if (!res.ok) throw new Error(json.error ?? "Create failed");
+      if (!res.ok) throw new Error(json.error ?? t("createFailed"));
       if (json.audience) {
-        const row: Row = { id: json.audience.id, name: json.audience.name, created_at: json.audience.created_at, count: 0 };
+        const row: Row = {
+          id: json.audience.id,
+          name: json.audience.name,
+          created_at: json.audience.created_at,
+          count: 0,
+        };
         setAudiences((prev) => [row, ...prev]);
         setSelectedId(row.id);
         setNewListName("");
-        setMessage("List created");
+        setMessage(t("listCreated"));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : t("createFailed"));
     } finally {
       setBusy(false);
     }
   }
 
-  async function addEmails() {
+  async function addNumbers() {
     setError(null);
     setMessage(null);
     if (!selectedId) {
-      setError("Create a list first");
+      setError(t("createListFirst"));
       return;
     }
     const lines = bulkText
       .split(/\r?\n/)
-      .flatMap((line) => line.split(/[,;]/))
       .map((l) => l.trim())
       .filter(Boolean);
     if (!lines.length) {
-      setError("Paste one email per line");
+      setError(t("pastePhones"));
       return;
     }
     setBusy(true);
@@ -72,13 +78,13 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
         body: JSON.stringify({ values: lines }),
       });
       const json = (await res.json()) as { error?: string; count?: number };
-      if (!res.ok) throw new Error(json.error ?? "Add failed");
+      if (!res.ok) throw new Error(json.error ?? t("addFailed"));
       setBulkText("");
       const total = json.count ?? 0;
-      setMessage(`List updated (${total} total in list)`);
+      setMessage(t("listUpdated", { count: total }));
       setAudiences((prev) => prev.map((a) => (a.id === selectedId ? { ...a, count: total } : a)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
+      setError(e instanceof Error ? e.message : t("addFailed"));
     } finally {
       setBusy(false);
     }
@@ -87,12 +93,12 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
   return (
     <div className="space-y-8">
       <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">New email list</h2>
+        <h2 className="text-sm font-semibold text-ink">{t("newListTitle")}</h2>
         <div className="mt-4 flex flex-wrap gap-2">
           <input
             value={newListName}
             onChange={(e) => setNewListName(e.target.value)}
-            placeholder="e.g. Newsletter subscribers"
+            placeholder={t("listPlaceholder")}
             className="min-w-[200px] flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm"
           />
           <button
@@ -101,22 +107,22 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
             onClick={() => void createList()}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
           >
-            Create list
+            {t("createList")}
           </button>
         </div>
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">Add emails</h2>
-        <p className="mt-1 text-xs text-ink-muted">One email per line (or separated by comma).</p>
+        <h2 className="text-sm font-semibold text-ink">{t("addNumbersTitle")}</h2>
+        <p className="mt-1 text-xs text-ink-muted">{t("addNumbersHint")}</p>
         <div className="mt-4 space-y-3">
-          <label className="block text-xs font-medium text-ink-muted">Target list</label>
+          <label className="block text-xs font-medium text-ink-muted">{t("targetList")}</label>
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
           >
-            {audiences.length === 0 ? <option value="">No lists yet</option> : null}
+            {audiences.length === 0 ? <option value="">{t("noLists")}</option> : null}
             {audiences.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name} ({a.count})
@@ -125,23 +131,23 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
           </select>
           {selected ? (
             <p className="text-xs text-ink-muted">
-              Selected: <span className="font-medium text-ink">{selected.name}</span>
+              {t("selected")} <span className="font-medium text-ink">{selected.name}</span>
             </p>
           ) : null}
           <textarea
             value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
             rows={8}
-            placeholder={"hello@customer.com\nbuyer@example.org"}
+            placeholder={"+15551234567\n+15559876543"}
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm"
           />
           <button
             type="button"
             disabled={busy || !selectedId}
-            onClick={() => void addEmails()}
+            onClick={() => void addNumbers()}
             className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium hover:bg-surface-muted disabled:opacity-60"
           >
-            Add to list
+            {t("addToList")}
           </button>
         </div>
       </div>

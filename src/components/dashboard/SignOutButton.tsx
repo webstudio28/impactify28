@@ -1,9 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export function SignOutButton() {
+  const t = useTranslations();
   const router = useRouter();
 
   async function signOut() {
@@ -17,9 +19,9 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={() => void signOut()}
-      className="mt-4 rounded-md px-2 py-2 text-left text-sm text-ink-muted hover:bg-surface-muted hover:text-ink"
+      className="rounded-md px-2 py-2 text-left text-sm text-ink-muted hover:bg-surface-muted hover:text-ink"
     >
-      Sign out
+      {t("signOut")}
     </button>
   );
 }

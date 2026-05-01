@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processDueOutboundSms } from "@/lib/campaigns/process-queue";
+import { syncQueuedCampaignsToCompleted } from "@/lib/campaigns/sync-status";
 
 /**
  * Vercel Cron / scheduler — same authorization pattern as other server crons.
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const result = await processDueOutboundSms(admin, { limit: 50 });
+    await syncQueuedCampaignsToCompleted(admin, result.campaignIds);
     return NextResponse.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Process failed";
