@@ -1,9 +1,11 @@
 import { getTranslations } from "next-intl/server";
+import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PhonesAudienceClient } from "./ui";
 
 export default async function PhonesAudiencePage() {
   const t = await getTranslations("phones");
+  const tHub = await getTranslations("audienceHub");
   const supabase = await createClient();
   const { data: audiences } = await supabase
     .from("audiences")
@@ -23,6 +25,9 @@ export default async function PhonesAudiencePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
+      <Link href="/dashboard/audience" className="text-sm text-ink-muted hover:text-ink">
+        {tHub("backToHub")}
+      </Link>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-sm text-ink-muted">{t("subtitle")}</p>

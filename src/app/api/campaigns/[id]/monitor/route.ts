@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type Ctx = { params: { id: string } };
+type Ctx = { params: Promise<{ id: string }> };
 
 const STATUS_FILTERS = new Set(["all", "pending", "sent", "failed"]);
 const MAX_LIMIT = 200;
 
 export async function GET(req: Request, ctx: Ctx) {
-  const { id } = ctx.params;
+  const { id } = await ctx.params;
   const supabase = await createClient();
   const {
     data: { user },

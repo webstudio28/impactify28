@@ -8,10 +8,11 @@ export default async function NewCampaignPage({
   params,
   searchParams,
 }: {
-  params: { locale: string };
-  searchParams: { id?: string };
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ id?: string }>;
 }) {
-  const { locale } = params;
+  const { locale } = await params;
+  const search = await searchParams;
   const t = await getTranslations("newCampaign");
   const supabase = await createClient();
   const {
@@ -21,7 +22,7 @@ export default async function NewCampaignPage({
     redirect(`/${locale}/login`);
   }
 
-  if (!searchParams.id) {
+  if (!search.id) {
     const { data, error } = await supabase
       .from("campaigns")
       .insert({ user_id: user.id, name: "New campaign", status: "draft" })

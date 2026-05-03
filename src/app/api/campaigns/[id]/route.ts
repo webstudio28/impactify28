@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-type Ctx = { params: { id: string } };
+type Ctx = { params: Promise<{ id: string }> };
+
+const CAMPAIGN_SELECT =
+  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input";
 
 export async function GET(_req: Request, ctx: Ctx) {
-  const { id } = ctx.params;
+  const { id } = await ctx.params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: campaign, error: cErr } = await supabase
-    .from("campaigns")
-    .select("id, name, status, audience_id, send_immediately, scheduled_at, created_at")
-    .eq("id", id)
-    .single();
+  const { data: campaign, error: cErr } = await supabase.from("campaigns").select(CAMPAIGN_SELECT).eq("id", id).single();
 
   if (cErr || !campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -27,11 +26,32 @@ export async function GET(_req: Request, ctx: Ctx) {
 
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
 
-  return NextResponse.json({ campaign, steps: steps ?? [] });
+  const { data: profile } = await supabase.from("profiles").select("logo_url, business_name").eq("id", user.id).single();
+
+  return NextResponse.json({ campaign, steps: steps ?? [], profile: profile ?? null });
+}
+
+async function validateMemberIdsBelongToAudience(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  audienceId: string,
+  ids: string[]
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!ids.length) return { ok: true };
+  const { data, error } = await supabase
+    .from("audience_members")
+    .select("id")
+    .eq("audience_id", audienceId)
+    .in("id", ids);
+
+  if (error) return { ok: false, message: error.message };
+  if ((data?.length ?? 0) !== ids.length) {
+    return { ok: false, message: "One or more selected contacts are not in this audience" };
+  }
+  return { ok: true };
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
-  const { id } = ctx.params;
+  const { id } = await ctx.params;
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,7 +60,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   const { data: existing, error: exErr } = await supabase
     .from("campaigns")
-    .select("id, status")
+    .select("id, status, audience_id")
     .eq("id", id)
     .single();
 
@@ -56,11 +76,42 @@ export async function PATCH(req: Request, ctx: Ctx) {
       audience_id?: string | null;
       send_immediately?: boolean;
       scheduled_at?: string | null;
+      channel?: string;
+      email_include_all?: boolean;
+      email_selected_member_ids?: string[];
+      email_generation_input?: Record<string, unknown> | null;
+      email_subject?: string | null;
+      email_html?: string | null;
     };
     if (typeof body.name === "string") payload.name = body.name.trim() || "Untitled campaign";
     if ("audience_id" in body) payload.audience_id = body.audience_id;
     if (typeof body.send_immediately === "boolean") payload.send_immediately = body.send_immediately;
     if ("scheduled_at" in body) payload.scheduled_at = body.scheduled_at;
+
+    if (body.channel === "sms" || body.channel === "email") {
+      payload.channel = body.channel;
+    }
+    if (typeof body.email_include_all === "boolean") {
+      payload.email_include_all = body.email_include_all;
+    }
+    if (Array.isArray(body.email_selected_member_ids)) {
+      const ids = body.email_selected_member_ids.filter((x): x is string => typeof x === "string");
+      const audienceId =
+        typeof body.audience_id === "string" ? body.audience_id : (existing.audience_id as string | null);
+      if (body.email_include_all === false && ids.length > 0 && audienceId) {
+        const v = await validateMemberIdsBelongToAudience(supabase, audienceId, ids);
+        if (!v.ok) return NextResponse.json({ error: v.message }, { status: 400 });
+      }
+      payload.email_selected_member_ids = ids;
+    }
+    if ("email_generation_input" in body) {
+      payload.email_generation_input = body.email_generation_input;
+    }
+    if (typeof body.email_subject === "string") payload.email_subject = body.email_subject.trim();
+    if (body.email_subject === "") payload.email_subject = null;
+    if (typeof body.email_html === "string") payload.email_html = body.email_html;
+    if (body.email_html === "" || body.email_html === null) payload.email_html = null;
+
     payload.updated_at = new Date().toISOString();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });

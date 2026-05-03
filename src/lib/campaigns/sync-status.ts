@@ -12,11 +12,15 @@ export async function syncQueuedCampaignsToCompleted(
   if (!unique.length) return;
 
   for (const id of unique) {
-    const { count, error } = await supabase
-      .from("outbound_sms")
-      .select("*", { count: "exact", head: true })
-      .eq("campaign_id", id)
-      .eq("status", "pending");
+    const { data: camp } = await supabase.from("campaigns").select("channel").eq("id", id).maybeSingle();
+    const channel = (camp?.channel as string | undefined) ?? "sms";
+
+    const pendingQuery =
+      channel === "email"
+        ? supabase.from("outbound_email").select("*", { count: "exact", head: true })
+        : supabase.from("outbound_sms").select("*", { count: "exact", head: true });
+
+    const { count, error } = await pendingQuery.eq("campaign_id", id).eq("status", "pending");
 
     if (error) continue;
     if ((count ?? 0) === 0) {

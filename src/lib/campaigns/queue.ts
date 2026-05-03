@@ -62,3 +62,43 @@ export async function enqueueCampaignSms(
   if (error) throw error;
   return { inserted: rows.length };
 }
+
+/**
+ * One outbound email row per recipient (same HTML + subject for all).
+ */
+export async function enqueueCampaignEmail(
+  supabase: SupabaseClient,
+  params: {
+    userId: string;
+    campaignId: string;
+    recipients: string[];
+    subject: string;
+    htmlBody: string;
+    startAt: Date;
+  }
+): Promise<{ inserted: number }> {
+  const { userId, campaignId, recipients, subject, htmlBody, startAt } = params;
+  const runAt = startAt.toISOString();
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const e of recipients) {
+    const t = e.trim();
+    if (!t) continue;
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    unique.push(t);
+  }
+  const rows = unique.map((to_email) => ({
+    user_id: userId,
+    campaign_id: campaignId,
+    to_email,
+    subject,
+    html_body: htmlBody,
+    run_at: runAt,
+  }));
+  if (!rows.length) return { inserted: 0 };
+  const { error } = await supabase.from("outbound_email").insert(rows);
+  if (error) throw error;
+  return { inserted: rows.length };
+}

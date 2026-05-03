@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { processDueOutboundEmail } from "@/lib/campaigns/process-email-queue";
 import { processDueOutboundSms } from "@/lib/campaigns/process-queue";
 import { syncQueuedCampaignsToCompleted } from "@/lib/campaigns/sync-status";
 
@@ -22,9 +23,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processDueOutboundSms(admin, { limit: 50 });
-    await syncQueuedCampaignsToCompleted(admin, result.campaignIds);
-    return NextResponse.json(result);
+    const sms = await processDueOutboundSms(admin, { limit: 50 });
+    const email = await processDueOutboundEmail(admin, { limit: 40 });
+    await syncQueuedCampaignsToCompleted(admin, [...sms.campaignIds, ...email.campaignIds]);
+    return NextResponse.json({ sms, email });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Process failed";
     return NextResponse.json({ error: msg }, { status: 500 });

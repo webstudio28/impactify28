@@ -37,10 +37,10 @@ export default async function DashboardHomePage() {
           <p className="text-sm text-ink-muted">{t("audiences")}</p>
           <p className="mt-2 text-3xl font-semibold">{audienceCount ?? 0}</p>
           <Link
-            href="/dashboard/audience/phones"
+            href="/dashboard/audience"
             className="mt-4 inline-block text-sm font-medium text-accent hover:text-accent-hover"
           >
-            {t("managePhones")}
+            {t("manageAudiences")}
           </Link>
         </div>
       </div>
