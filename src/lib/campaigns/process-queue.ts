@@ -58,7 +58,10 @@ export async function processDueOutboundSms(
   const limit = options?.limit ?? 80;
   const ts = nowIso();
 
-  const { data: running, error: rErr } = await supabase.from("campaigns").select("id").eq("status", "running");
+  const { data: running, error: rErr } = await supabase
+    .from("campaigns")
+    .select("id")
+    .in("status", ["running", "queued"]);
   if (rErr) throw rErr;
   const runningIds = (running ?? []).map((r) => r.id).filter(Boolean);
   if (!runningIds.length) {

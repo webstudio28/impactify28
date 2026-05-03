@@ -32,8 +32,8 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const action = body.action;
   if (action === "pause") {
-    if (campaign.status !== "running") {
-      return NextResponse.json({ error: "Only running campaigns can be paused" }, { status: 400 });
+    if (campaign.status !== "running" && campaign.status !== "queued") {
+      return NextResponse.json({ error: "Only active sends can be paused" }, { status: 400 });
     }
     const { error } = await supabase
       .from("campaigns")

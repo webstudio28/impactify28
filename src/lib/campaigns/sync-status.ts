@@ -24,7 +24,7 @@ export async function syncQueuedCampaignsToCompleted(
         .from("campaigns")
         .update({ status: "completed", updated_at: new Date().toISOString() })
         .eq("id", id)
-        .in("status", ["running", "paused"]);
+        .in("status", ["running", "paused", "queued"]);
     }
   }
 }
