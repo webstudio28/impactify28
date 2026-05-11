@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
+import { composeSmsBody, splitSmsEditorValue } from "@/lib/sms/body";
 
 type Audience = { id: string; name: string; audience_type: string };
 
@@ -30,6 +31,53 @@ function StepIndicator({ step, max }: { step: number; max: number }) {
           {n}
         </span>
       ))}
+    </div>
+  );
+}
+
+type WizardTranslate = (key: string, values?: Record<string, string | number>) => string;
+
+function SmsMessageStep({
+  draft,
+  onChange,
+  t,
+}: {
+  draft: StepDraft;
+  onChange: (next: StepDraft) => void;
+  t: WizardTranslate;
+}) {
+  const patch = (p: Partial<StepDraft>) =>
+    onChange({ ...draft, delay_after_previous_hours: 0, ...p });
+  const display = composeSmsBody(draft.body, draft.link_url);
+  const fullLen = display.length;
+  return (
+    <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <h2 className="text-sm font-semibold text-ink">{t("step3Title")}</h2>
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs text-ink-muted">{t("message")}</label>
+          <textarea
+            value={display}
+            onChange={(e) => {
+              const s = splitSmsEditorValue(e.target.value, draft.link_url);
+              patch({ body: s.body, link_url: s.link_url });
+            }}
+            rows={6}
+            className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
+            placeholder={t("messagePlaceholder")}
+          />
+          <p className="mt-1 text-xs text-ink-muted">{t("charsHint", { count: fullLen, max: SMS_HINT })}</p>
+        </div>
+        <div>
+          <label className="text-xs text-ink-muted">{t("linkOptional")}</label>
+          <input
+            value={draft.link_url}
+            onChange={(e) => patch({ link_url: e.target.value })}
+            className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
+            placeholder={t("linkPlaceholder")}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -121,13 +169,23 @@ export function CampaignWizard() {
         );
       }
       if (data.steps?.length) {
-        setSteps(
-          data.steps.map((s) => ({
-            body: s.body,
-            link_url: s.link_url ?? "",
-            delay_after_previous_hours: s.delay_after_previous_hours ?? 0,
-          }))
-        );
+        const mapped = data.steps.map((s) => ({
+          body: s.body,
+          link_url: s.link_url ?? "",
+          delay_after_previous_hours: s.delay_after_previous_hours ?? 0,
+        }));
+        if (ch === "sms") {
+          const first = mapped[0]!;
+          setSteps([
+            {
+              body: first.body ?? "",
+              link_url: first.link_url ?? "",
+              delay_after_previous_hours: 0,
+            },
+          ]);
+        } else {
+          setSteps(mapped);
+        }
       }
     },
     [router, t]
@@ -183,6 +241,27 @@ export function CampaignWizard() {
     const found = audiences.find((a) => a.id === audienceId);
     setAudienceLabel(found?.name ?? "");
   }, [audienceId, audiences]);
+
+  useEffect(() => {
+    if (channel !== "sms") return;
+    setSteps((prev) => {
+      const head = prev[0] ?? { body: "", link_url: "", delay_after_previous_hours: 0 };
+      const one: StepDraft = {
+        body: head.body,
+        link_url: head.link_url,
+        delay_after_previous_hours: 0,
+      };
+      if (
+        prev.length === 1 &&
+        prev[0].body === one.body &&
+        prev[0].link_url === one.link_url &&
+        prev[0].delay_after_previous_hours === 0
+      ) {
+        return prev;
+      }
+      return [one];
+    });
+  }, [channel]);
 
   useEffect(() => {
     if (channel !== "email" || step !== 3 || !audienceId) return;
@@ -241,13 +320,16 @@ export function CampaignWizard() {
 
   async function saveSteps() {
     if (!idParam) return;
+    const only = steps[0] ?? { body: "", link_url: "", delay_after_previous_hours: 0 };
     const payload = {
-      steps: steps.map((s, i) => ({
-        step_order: i + 1,
-        body: s.body,
-        link_url: s.link_url || null,
-        delay_after_previous_hours: s.delay_after_previous_hours,
-      })),
+      steps: [
+        {
+          step_order: 1,
+          body: only.body,
+          link_url: only.link_url.trim() || null,
+          delay_after_previous_hours: 0,
+        },
+      ],
     };
     const res = await fetch(`/api/campaigns/${idParam}/steps`, {
       method: "PUT",
@@ -285,7 +367,8 @@ export function CampaignWizard() {
         await patchCampaign({ audience_id: audienceId });
       }
       if (step === 3 && channel === "sms") {
-        const valid = steps.some((s) => s.body.trim() || s.link_url.trim());
+        const first = steps[0];
+        const valid = Boolean(composeSmsBody(first?.body ?? "", first?.link_url ?? "").trim());
         if (!valid) throw new Error(t("addMessage"));
         await saveSteps();
       }
@@ -465,7 +548,6 @@ export function CampaignWizard() {
           />
           <div>
             <p className="text-sm font-medium text-ink">{t("channelTitle")}</p>
-            <p className="mt-1 text-xs text-ink-muted">{t("channelHint")}</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -526,79 +608,11 @@ export function CampaignWizard() {
       )}
 
       {step === 3 && channel === "sms" && (
-        <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-ink">{t("step3Title")}</h2>
-            <button
-              type="button"
-              onClick={() =>
-                setSteps((prev) => [...prev, { body: "", link_url: "", delay_after_previous_hours: 0 }])
-              }
-              className="text-sm font-medium text-accent hover:text-accent-hover"
-            >
-              {t("addStep")}
-            </button>
-          </div>
-          {steps.map((s, idx) => (
-            <div key={idx} className="space-y-3 border-t border-zinc-100 pt-4 first:border-t-0 first:pt-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                {t("smsLabel", { n: idx + 1 })}
-              </p>
-              <div>
-                <label className="text-xs text-ink-muted">{t("message")}</label>
-                <textarea
-                  value={s.body}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSteps((prev) => prev.map((p, i) => (i === idx ? { ...p, body: v } : p)));
-                  }}
-                  rows={4}
-                  className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-                  placeholder={t("messagePlaceholder")}
-                />
-                <p className="mt-1 text-xs text-ink-muted">
-                  {t("charsHint", { count: s.body.length, max: SMS_HINT })}
-                </p>
-              </div>
-              <div>
-                <label className="text-xs text-ink-muted">{t("linkOptional")}</label>
-                <input
-                  value={s.link_url}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSteps((prev) => prev.map((p, i) => (i === idx ? { ...p, link_url: v } : p)));
-                  }}
-                  className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-                  placeholder={t("linkPlaceholder")}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-ink-muted">
-                  {idx === 0 ? t("delayFirst") : t("delayAfter")}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={s.delay_after_previous_hours}
-                  onChange={(e) => {
-                    const v = Math.max(0, Number(e.target.value) || 0);
-                    setSteps((prev) => prev.map((p, i) => (i === idx ? { ...p, delay_after_previous_hours: v } : p)));
-                  }}
-                  className="mt-1 w-32 rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                />
-              </div>
-              {steps.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
-                  className="text-xs text-red-600 hover:underline"
-                >
-                  {t("removeStep")}
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <SmsMessageStep
+          draft={steps[0] ?? { body: "", link_url: "", delay_after_previous_hours: 0 }}
+          onChange={(next) => setSteps([next])}
+          t={t as WizardTranslate}
+        />
       )}
 
       {step === 3 && channel === "email" && (
@@ -827,8 +841,14 @@ export function CampaignWizard() {
               <dd className="font-medium text-ink">{audienceLabel || audienceId || t("dash")}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-muted">{t("reviewSteps")}</dt>
-              <dd className="text-right font-medium text-ink">{t("smsCount", { count: steps.length })}</dd>
+              <dt className="text-ink-muted">{t("message")}</dt>
+              <dd className="max-w-[60%] break-words text-right font-medium text-ink">
+                {(() => {
+                  const b = composeSmsBody(steps[0]?.body ?? "", steps[0]?.link_url ?? "").trim();
+                  if (b) return b.length > 120 ? `${b.slice(0, 120)}…` : b;
+                  return t("dash");
+                })()}
+              </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-ink-muted">{t("reviewTiming")}</dt>
