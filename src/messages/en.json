@@ -96,6 +96,7 @@
     "empty": "No campaigns yet.",
     "createOne": "Create one",
     "continue": "Continue",
+    "analytics": "Analytics",
     "dash": "—",
     "monitor": {
       "pause": "Pause",
@@ -295,6 +296,20 @@
     "listUpdated": "List updated ({count} total in list)",
     "createFailed": "Create failed",
     "addFailed": "Add failed"
+  },
+  "analytics": {
+    "backCampaigns": "← Campaigns",
+    "status": "Status",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load analytics",
+    "sent": "Sent",
+    "failed": "Failed",
+    "pending": "Pending",
+    "clicks": "Clicks",
+    "ctr": "CTR (clicks / sent)",
+    "ctrHint": "{clicks} clicks from {sent} sent",
+    "linksTitle": "Shortened links",
+    "noLinks": "This campaign has no shortened links."
   },
   "google": {
     "buildUrlFailed": "Could not build sign-in URL. Try again.",

@@ -221,6 +221,12 @@ export function CampaignsTable({
                           >
                             {resultsLabel(c.status)}
                           </button>
+                          <Link
+                            href={`/dashboard/campaigns/${c.id}/analytics`}
+                            className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"
+                          >
+                            {t("analytics")}
+                          </Link>
                         </>
                       ) : null}
                     </div>
