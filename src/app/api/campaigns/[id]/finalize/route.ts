@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enqueueCampaignEmail, enqueueCampaignSms } from "@/lib/campaigns/queue";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
+import { shortenUrl } from "@/lib/links/shorten";
+
+const SHORT_DOMAIN = process.env.SHORT_DOMAIN ?? "rvo5.com";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -51,6 +54,20 @@ export async function POST(_req: Request, ctx: Ctx) {
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
     if (!steps?.length) return NextResponse.json({ error: "Add at least one SMS step" }, { status: 400 });
 
+    // Shorten link_url for each step that has one
+    const shortenedSteps = await Promise.all(
+      steps.map(async (step) => {
+        const link = typeof step.link_url === "string" ? step.link_url.trim() : "";
+        if (!link) return step;
+        try {
+          const code = await shortenUrl(link, id, user.id);
+          return { ...step, link_url: `https://${SHORT_DOMAIN}/${code}` };
+        } catch {
+          return step;
+        }
+      })
+    );
+
     const { data: members, error: mErr } = await supabase
       .from("audience_members")
       .select("value")
@@ -79,7 +96,7 @@ export async function POST(_req: Request, ctx: Ctx) {
         userId: user.id,
         campaignId: id,
         phones,
-        steps,
+        steps: shortenedSteps,
         startAt,
       });
       if (inserted === 0) {
