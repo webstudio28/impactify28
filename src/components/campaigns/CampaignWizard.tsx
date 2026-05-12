@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { composeSmsBody, splitSmsEditorValue } from "@/lib/sms/body";
+import { isOurShortUrl } from "@/lib/links/short-domain";
 
 type Audience = { id: string; name: string; audience_type: string };
 
@@ -40,20 +41,96 @@ type WizardTranslate = (key: string, values?: Record<string, string | number>) =
 function SmsMessageStep({
   draft,
   onChange,
+  campaignId,
   t,
 }: {
   draft: StepDraft;
   onChange: (next: StepDraft) => void;
+  campaignId: string;
   t: WizardTranslate;
 }) {
+  const [shortenBusy, setShortenBusy] = useState(false);
+  const [shortenError, setShortenError] = useState<string | null>(null);
+
   const patch = (p: Partial<StepDraft>) =>
     onChange({ ...draft, delay_after_previous_hours: 0, ...p });
   const display = composeSmsBody(draft.body, draft.link_url);
   const fullLen = display.length;
+  const linkTrim = draft.link_url.trim();
+  const alreadyShort = linkTrim ? isOurShortUrl(linkTrim) : false;
+  const shortenDisabled = shortenBusy || !linkTrim || alreadyShort;
+
+  async function shortenLink() {
+    setShortenError(null);
+    if (!linkTrim) {
+      setShortenError(t("linkShortenErrorEmpty"));
+      return;
+    }
+    if (alreadyShort) {
+      setShortenError(t("linkShortenErrorAlready"));
+      return;
+    }
+    setShortenBusy(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/short-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: draft.link_url }),
+      });
+      const json = (await res.json()) as { shortUrl?: string; error?: string };
+      if (!res.ok) {
+        const err = json.error ?? "";
+        if (err === "URL required") setShortenError(t("linkShortenErrorEmpty"));
+        else if (err === "Invalid URL") setShortenError(t("linkShortenErrorInvalid"));
+        else if (err === "Already a short link") setShortenError(t("linkShortenErrorAlready"));
+        else setShortenError(t("linkShortenErrorFailed"));
+        return;
+      }
+      if (json.shortUrl) patch({ link_url: json.shortUrl });
+    } catch {
+      setShortenError(t("linkShortenErrorFailed"));
+    } finally {
+      setShortenBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <h2 className="text-sm font-semibold text-ink">{t("step3Title")}</h2>
       <div className="space-y-3">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-ink-muted">{t("linkOptional")}</label>
+            <button
+              type="button"
+              title={t("linkShortenWhy")}
+              aria-label={t("linkShortenWhyAria")}
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[11px] font-semibold text-ink-muted hover:bg-zinc-50"
+            >
+              ?
+            </button>
+          </div>
+          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-stretch">
+            <input
+              value={draft.link_url}
+              onChange={(e) => {
+                setShortenError(null);
+                patch({ link_url: e.target.value });
+              }}
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
+              placeholder={t("linkPlaceholder")}
+            />
+            <button
+              type="button"
+              disabled={shortenDisabled}
+              onClick={() => void shortenLink()}
+              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50 sm:self-stretch"
+            >
+              {shortenBusy ? t("linkShortenBusy") : t("linkShortenButton")}
+            </button>
+          </div>
+          {shortenError ? <p className="text-xs text-red-600">{shortenError}</p> : null}
+        </div>
         <div>
           <label className="text-xs text-ink-muted">{t("message")}</label>
           <textarea
@@ -67,15 +144,6 @@ function SmsMessageStep({
             placeholder={t("messagePlaceholder")}
           />
           <p className="mt-1 text-xs text-ink-muted">{t("charsHint", { count: fullLen, max: SMS_HINT })}</p>
-        </div>
-        <div>
-          <label className="text-xs text-ink-muted">{t("linkOptional")}</label>
-          <input
-            value={draft.link_url}
-            onChange={(e) => patch({ link_url: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-            placeholder={t("linkPlaceholder")}
-          />
         </div>
       </div>
     </div>
@@ -611,6 +679,7 @@ export function CampaignWizard() {
         <SmsMessageStep
           draft={steps[0] ?? { body: "", link_url: "", delay_after_previous_hours: 0 }}
           onChange={(next) => setSteps([next])}
+          campaignId={idParam}
           t={t as WizardTranslate}
         />
       )}

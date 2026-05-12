@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enqueueCampaignEmail, enqueueCampaignSms } from "@/lib/campaigns/queue";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
+import { isOurShortUrl, shortLinkPublicUrl } from "@/lib/links/short-domain";
 import { shortenUrl } from "@/lib/links/shorten";
-
-const SHORT_DOMAIN = process.env.SHORT_DOMAIN ?? "rvo5.com";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -59,9 +58,10 @@ export async function POST(_req: Request, ctx: Ctx) {
       steps.map(async (step) => {
         const link = typeof step.link_url === "string" ? step.link_url.trim() : "";
         if (!link) return step;
+        if (isOurShortUrl(link)) return step;
         try {
           const code = await shortenUrl(link, id, user.id);
-          return { ...step, link_url: `https://${SHORT_DOMAIN}/${code}` };
+          return { ...step, link_url: shortLinkPublicUrl(code) };
         } catch {
           return step;
         }

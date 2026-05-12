@@ -22,6 +22,16 @@ export default async function NewCampaignPage({
     redirect(`/${locale}/login`);
   }
 
+  const { data: profile } = await supabase.from("profiles").select("id").eq("id", user.id).maybeSingle();
+  if (!profile) {
+    const { error: profileErr } = await supabase
+      .from("profiles")
+      .insert({ id: user.id, business_name: "My business" });
+    if (profileErr) {
+      redirect(`/${locale}/dashboard/campaigns?error=no_profile`);
+    }
+  }
+
   if (!search.id) {
     const { data, error } = await supabase
       .from("campaigns")
@@ -30,7 +40,7 @@ export default async function NewCampaignPage({
       .single();
 
     if (error || !data) {
-      redirect(`/${locale}/dashboard/campaigns`);
+      redirect(`/${locale}/dashboard/campaigns?error=campaign_insert`);
     }
     redirect(`/${locale}/dashboard/campaigns/new?id=${data.id}`);
   }

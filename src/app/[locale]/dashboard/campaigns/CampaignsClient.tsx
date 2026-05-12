@@ -118,6 +118,8 @@ export function CampaignsTable({
   const router = useRouter();
   const [monitorId, setMonitorId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
 
   async function control(id: string, action: "pause" | "resume") {
     setBusyId(id);
@@ -140,6 +142,25 @@ export function CampaignsTable({
 
   function openMonitor(c: CampaignRow) {
     setMonitorId(c.id);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeleteBusyId(id);
+    try {
+      const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        alert(j.error ?? t("deleteError"));
+        return;
+      }
+      if (monitorId === id) setMonitorId(null);
+      setDeleteTarget(null);
+      router.refresh();
+    } finally {
+      setDeleteBusyId(null);
+    }
   }
 
   function resultsLabel(status: string) {
@@ -175,7 +196,18 @@ export function CampaignsTable({
               campaigns.map((c) => (
                 <tr key={c.id} className="border-b border-zinc-50 last:border-0">
                   <td className="px-4 py-3 font-medium text-ink">{c.name}</td>
-                  <td className="px-4 py-3 capitalize text-ink-muted">{c.status}</td>
+                  <td className="px-4 py-3 text-ink-muted">
+                    {c.status === "draft" ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="inline-flex w-fit rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-ink">
+                          {t("statusDraft")}
+                        </span>
+                        <span className="text-xs text-ink-muted">{t("draftNotStarted")}</span>
+                      </div>
+                    ) : (
+                      <span className="capitalize">{c.status}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-ink-muted">
                     {c.scheduled_at ? formatAppDate(c.scheduled_at, locale, "datetime") : dash}
                   </td>
@@ -229,6 +261,17 @@ export function CampaignsTable({
                           </Link>
                         </>
                       ) : null}
+                      <button
+                        type="button"
+                        disabled={deleteBusyId === c.id}
+                        onClick={() => {
+                          if (monitorId === c.id) setMonitorId(null);
+                          setDeleteTarget({ id: c.id, name: c.name });
+                        }}
+                        className="inline-flex rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deleteBusyId === c.id ? t("deleting") : t("delete")}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -240,6 +283,43 @@ export function CampaignsTable({
 
       {monitorId ? (
         <MonitorModal campaignId={monitorId} locale={locale} onClose={() => setMonitorId(null)} />
+      ) : null}
+
+      {deleteTarget ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-campaign-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !deleteBusyId) setDeleteTarget(null);
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 id="delete-campaign-title" className="text-base font-semibold text-ink">
+              {t("deleteConfirmTitle")}
+            </h2>
+            <p className="mt-3 text-sm text-ink-muted">{t("deleteConfirmBody", { name: deleteTarget.name })}</p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={Boolean(deleteBusyId)}
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
+              >
+                {t("deleteConfirmCancel")}
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(deleteBusyId)}
+                onClick={() => void confirmDelete()}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteBusyId ? t("deleting") : t("deleteConfirmSubmit")}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   );

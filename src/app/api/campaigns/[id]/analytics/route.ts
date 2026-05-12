@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { redis } from "@/lib/redis";
+import { shortLinkPublicUrl } from "@/lib/links/short-domain";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,7 +23,6 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // SMS counts from outbound_sms
   const [{ count: sent }, { count: failed }, { count: pending }] = await Promise.all([
     supabase.from("outbound_sms").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "sent"),
     supabase.from("outbound_sms").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "failed"),
@@ -31,21 +31,19 @@ export async function GET(_req: Request, ctx: Ctx) {
 
   const total = (sent ?? 0) + (failed ?? 0) + (pending ?? 0);
 
-  // Short links for this campaign
   const { data: links } = await supabase
     .from("short_links")
     .select("code, original_url, created_at")
     .eq("campaign_id", id)
     .order("created_at", { ascending: true });
 
-  // Fetch click counts from Redis for each link
   const linksWithClicks = await Promise.all(
     (links ?? []).map(async (link) => {
       const clicks = await redis.get<number>(`clicks:${link.code}`);
       return {
         code: link.code,
         original_url: link.original_url,
-        short_url: `https://${process.env.SHORT_DOMAIN ?? "rvo5.com"}/${link.code}`,
+        short_url: shortLinkPublicUrl(link.code),
         clicks: clicks ?? 0,
         created_at: link.created_at,
       };

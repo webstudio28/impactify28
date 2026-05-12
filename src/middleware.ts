@@ -53,8 +53,10 @@ async function refreshSupabaseSession(request: NextRequest, response: NextRespon
   const isAuthPage = pathWithoutLocale === "/login" || pathWithoutLocale === "/signup";
   const isDashboard =
     pathWithoutLocale === "/dashboard" || pathWithoutLocale.startsWith("/dashboard/");
+  const isAdmin =
+    pathWithoutLocale === "/admin" || pathWithoutLocale.startsWith("/admin/");
 
-  if (isDashboard && !user) {
+  if ((isDashboard || isAdmin) && !user) {
     const loc = locale ?? routing.defaultLocale;
     const loginUrl = new URL(`/${loc}/login`, request.url);
     loginUrl.searchParams.set("redirect", pathname);

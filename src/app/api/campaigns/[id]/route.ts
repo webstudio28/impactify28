@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -121,4 +122,40 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ campaign: data });
+}
+
+export async function DELETE(_req: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const isAdmin = profile?.role === "admin";
+
+  let data: { id: string }[] | null = null;
+  let error: { message: string } | null = null;
+
+  try {
+    const client = isAdmin ? createAdminClient() : supabase;
+    const res = await client.from("campaigns").delete().eq("id", id).select("id");
+    data = res.data;
+    error = res.error;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    if (isAdmin && msg.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+      return NextResponse.json(
+        { error: "Admin campaign delete requires SUPABASE_SERVICE_ROLE_KEY on the server." },
+        { status: 503 }
+      );
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  return NextResponse.json({ ok: true });
 }
