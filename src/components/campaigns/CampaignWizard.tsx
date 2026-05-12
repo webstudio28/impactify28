@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
-import { composeSmsBody, splitSmsEditorValue } from "@/lib/sms/body";
+import { composeSmsBody } from "@/lib/sms/body";
 import { isOurShortUrl } from "@/lib/links/short-domain";
 
 type Audience = { id: string; name: string; audience_type: string };
@@ -49,33 +49,45 @@ function SmsMessageStep({
   campaignId: string;
   t: WizardTranslate;
 }) {
+  const patch = (p: Partial<StepDraft>) =>
+    onChange({ ...draft, delay_after_previous_hours: 0, ...p });
+
+  // Local URL input state — separates "what's typed" from "what's committed to the draft"
+  const [linkInput, setLinkInput] = useState(draft.link_url);
+  // "added" = link has been committed to the SMS (shown as chip, field locked)
+  const [added, setAdded] = useState(draft.link_url.trim().length > 0);
   const [shortenBusy, setShortenBusy] = useState(false);
   const [shortenError, setShortenError] = useState<string | null>(null);
 
-  const patch = (p: Partial<StepDraft>) =>
-    onChange({ ...draft, delay_after_previous_hours: 0, ...p });
-  const display = composeSmsBody(draft.body, draft.link_url);
-  const fullLen = display.length;
-  const linkTrim = draft.link_url.trim();
-  const alreadyShort = linkTrim ? isOurShortUrl(linkTrim) : false;
-  const shortenDisabled = shortenBusy || !linkTrim || alreadyShort;
+  const linkTrim = linkInput.trim();
+  const isShortened = linkTrim ? isOurShortUrl(linkTrim) : false;
+  const charCount =
+    draft.body.length + (added && linkTrim ? 1 + linkTrim.length : 0);
+
+  function addToSms() {
+    if (!linkTrim) return;
+    patch({ link_url: linkTrim });
+    setAdded(true);
+    setShortenError(null);
+  }
+
+  function resetLink() {
+    setLinkInput("");
+    setAdded(false);
+    setShortenError(null);
+    patch({ link_url: "" });
+  }
 
   async function shortenLink() {
     setShortenError(null);
-    if (!linkTrim) {
-      setShortenError(t("linkShortenErrorEmpty"));
-      return;
-    }
-    if (alreadyShort) {
-      setShortenError(t("linkShortenErrorAlready"));
-      return;
-    }
+    if (!linkTrim) { setShortenError(t("linkShortenErrorEmpty")); return; }
+    if (isShortened) { setShortenError(t("linkShortenErrorAlready")); return; }
     setShortenBusy(true);
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/short-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: draft.link_url }),
+        body: JSON.stringify({ url: linkTrim }),
       });
       const json = (await res.json()) as { shortUrl?: string; error?: string };
       if (!res.ok) {
@@ -86,7 +98,11 @@ function SmsMessageStep({
         else setShortenError(t("linkShortenErrorFailed"));
         return;
       }
-      if (json.shortUrl) patch({ link_url: json.shortUrl });
+      if (json.shortUrl) {
+        setLinkInput(json.shortUrl);
+        // If already added to SMS, update the chip and draft too
+        if (added) patch({ link_url: json.shortUrl });
+      }
     } catch {
       setShortenError(t("linkShortenErrorFailed"));
     } finally {
@@ -98,6 +114,8 @@ function SmsMessageStep({
     <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
       <h2 className="text-sm font-semibold text-ink">{t("step3Title")}</h2>
       <div className="space-y-3">
+
+        {/* ── Link field ── */}
         <div>
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-ink-muted">{t("linkOptional")}</label>
@@ -110,41 +128,88 @@ function SmsMessageStep({
               ?
             </button>
           </div>
-          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-stretch">
-            <input
-              value={draft.link_url}
-              onChange={(e) => {
-                setShortenError(null);
-                patch({ link_url: e.target.value });
-              }}
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
-              placeholder={t("linkPlaceholder")}
-            />
-            <button
-              type="button"
-              disabled={shortenDisabled}
-              onClick={() => void shortenLink()}
-              className="shrink-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50 sm:self-stretch"
-            >
-              {shortenBusy ? t("linkShortenBusy") : t("linkShortenButton")}
-            </button>
+          <input
+            value={linkInput}
+            onChange={(e) => { setShortenError(null); setLinkInput(e.target.value); }}
+            disabled={added}
+            className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2 ${
+              added
+                ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-ink-muted"
+                : "border-zinc-200"
+            }`}
+            placeholder={t("linkPlaceholder")}
+          />
+
+          {/* Action buttons */}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {!added ? (
+              <>
+                <button
+                  type="button"
+                  disabled={!linkTrim || isShortened || shortenBusy}
+                  onClick={() => void shortenLink()}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {shortenBusy ? t("linkShortenBusy") : t("linkShortenButton")}
+                </button>
+                <button
+                  type="button"
+                  disabled={!linkTrim}
+                  onClick={addToSms}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t("linkAddToSms")}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={isShortened || shortenBusy}
+                  onClick={() => void shortenLink()}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {shortenBusy ? t("linkShortenBusy") : t("linkShortenButton")}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetLink}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"
+                >
+                  {t("linkAddNew")}
+                </button>
+              </>
+            )}
           </div>
-          {shortenError ? <p className="text-xs text-red-600">{shortenError}</p> : null}
+          {shortenError ? (
+            <p className="mt-1 text-xs text-red-600">{shortenError}</p>
+          ) : null}
         </div>
+
+        {/* ── Message textarea ── */}
         <div>
           <label className="text-xs text-ink-muted">{t("message")}</label>
           <textarea
-            value={display}
-            onChange={(e) => {
-              const s = splitSmsEditorValue(e.target.value, draft.link_url);
-              patch({ body: s.body, link_url: s.link_url });
-            }}
-            rows={6}
+            value={draft.body}
+            onChange={(e) => patch({ body: e.target.value })}
+            rows={5}
             className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
             placeholder={t("messagePlaceholder")}
           />
-          <p className="mt-1 text-xs text-ink-muted">{t("charsHint", { count: fullLen, max: SMS_HINT })}</p>
+          {/* Link chip — always pinned to the end of the message */}
+          {added && linkTrim ? (
+            <div className="mt-1 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5">
+              <span className="flex-1 truncate font-mono text-xs text-blue-700">{linkTrim}</span>
+              <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-500">
+                link
+              </span>
+            </div>
+          ) : null}
+          <p className="mt-1 text-xs text-ink-muted">
+            {t("charsHint", { count: charCount, max: SMS_HINT })}
+          </p>
         </div>
+
       </div>
     </div>
   );
