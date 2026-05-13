@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type Ctx = { params: Promise<{ id: string }> };
 
 const CAMPAIGN_SELECT =
-  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input";
+  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input, email_template_type, email_template_data, email_color_theme, moderation_note";
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -66,8 +66,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     .single();
 
   if (exErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.status !== "draft") {
-    return NextResponse.json({ error: "Only draft campaigns can be edited" }, { status: 400 });
+  if (existing.status !== "draft" && existing.status !== "rejected") {
+    return NextResponse.json({ error: "Only draft or rejected campaigns can be edited" }, { status: 400 });
   }
 
   let payload: Record<string, unknown> = {};
@@ -83,6 +83,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
       email_generation_input?: Record<string, unknown> | null;
       email_subject?: string | null;
       email_html?: string | null;
+      email_template_type?: string | null;
+      email_template_data?: Record<string, unknown> | null;
+      email_color_theme?: string | null;
     };
     if (typeof body.name === "string") payload.name = body.name.trim() || "Untitled campaign";
     if ("audience_id" in body) payload.audience_id = body.audience_id;
@@ -112,6 +115,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body.email_subject === "") payload.email_subject = null;
     if (typeof body.email_html === "string") payload.email_html = body.email_html;
     if (body.email_html === "" || body.email_html === null) payload.email_html = null;
+
+    if (
+      body.email_template_type === "promotional" ||
+      body.email_template_type === "product_launch" ||
+      body.email_template_type === "seasonal" ||
+      body.email_template_type === "discount_coupon" ||
+      body.email_template_type === null
+    ) {
+      payload.email_template_type = body.email_template_type;
+    }
+    if ("email_template_data" in body) {
+      payload.email_template_data = body.email_template_data;
+    }
+    if (typeof body.email_color_theme === "string" && body.email_color_theme.trim()) {
+      payload.email_color_theme = body.email_color_theme.trim();
+    }
 
     payload.updated_at = new Date().toISOString();
   } catch {

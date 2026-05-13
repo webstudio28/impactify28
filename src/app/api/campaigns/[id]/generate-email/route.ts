@@ -1,26 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  generateCampaignEmailHtml,
-  type EmailGenerationBrief,
-} from "@/lib/openai/generate-campaign-email";
+import { renderEmailTemplate, parseTemplateData } from "@/lib/email/templates/render";
+import { DEFAULT_THEME_KEY } from "@/lib/email/themes";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-function parseBrief(raw: unknown): EmailGenerationBrief | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const purpose = typeof o.purpose === "string" ? o.purpose.trim() : "";
-  const targetUrl = typeof o.targetUrl === "string" ? o.targetUrl.trim() : "";
-  const language = typeof o.language === "string" ? o.language.trim() : "";
-  const hasPromo = Boolean(o.hasPromo);
-  const promoPercent =
-    typeof o.promoPercent === "number" && !Number.isNaN(o.promoPercent) ? Math.max(0, o.promoPercent) : null;
-  const promoCode = typeof o.promoCode === "string" ? o.promoCode.trim() || null : null;
-  const freeText = typeof o.freeText === "string" ? o.freeText : "";
-  if (!purpose || !targetUrl || !language) return null;
-  return { purpose, targetUrl, language, hasPromo, promoPercent, promoCode, freeText };
-}
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -32,53 +15,64 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
-    .select("id, status, channel, email_generation_input")
+    .select("id, status, channel, email_template_data, email_template_type, email_color_theme")
     .eq("id", id)
     .single();
 
   if (cErr || !campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (campaign.status !== "draft") {
-    return NextResponse.json({ error: "Only draft campaigns can be edited" }, { status: 400 });
+  if (campaign.status !== "draft" && campaign.status !== "rejected") {
+    return NextResponse.json({ error: "Only draft or rejected campaigns can be edited" }, { status: 400 });
   }
   if (campaign.channel !== "email") {
     return NextResponse.json({ error: "Not an email campaign" }, { status: 400 });
   }
 
-  let brief: EmailGenerationBrief | null = null;
+  let rawTemplateData: unknown = null;
+  let colorTheme: string = (campaign.email_color_theme as string | null) ?? DEFAULT_THEME_KEY;
+
   try {
-    const body = (await req.json()) as { brief?: unknown };
-    if (body.brief) brief = parseBrief(body.brief);
+    const body = (await req.json()) as {
+      templateData?: unknown;
+      colorTheme?: string;
+    };
+    if (body.templateData) rawTemplateData = body.templateData;
+    if (typeof body.colorTheme === "string" && body.colorTheme.trim()) {
+      colorTheme = body.colorTheme.trim();
+    }
   } catch {
     /* use stored */
   }
 
-  if (!brief) {
-    brief = parseBrief(campaign.email_generation_input);
-  }
-  if (!brief) {
-    return NextResponse.json({ error: "Missing or invalid brief (purpose, target URL, language required)" }, { status: 400 });
+  if (!rawTemplateData) {
+    rawTemplateData = campaign.email_template_data;
   }
 
-  const { data: profile } = await supabase.from("profiles").select("business_name").eq("id", user.id).single();
+  const templateData = parseTemplateData(rawTemplateData);
+  if (!templateData) {
+    return NextResponse.json(
+      { error: "Missing or invalid template data. Complete all required fields." },
+      { status: 400 }
+    );
+  }
 
   try {
-    const { subject, html } = await generateCampaignEmailHtml(brief, {
-      businessName: profile?.business_name ?? null,
-    });
+    const { html, subject } = renderEmailTemplate(templateData, colorTheme);
 
     const { error: upErr } = await supabase
       .from("campaigns")
       .update({
         email_subject: subject,
         email_html: html,
-        email_generation_input: JSON.parse(JSON.stringify(brief)) as Record<string, unknown>,
+        email_template_type: templateData.templateType,
+        email_template_data: JSON.parse(JSON.stringify(templateData)) as Record<string, unknown>,
+        email_color_theme: colorTheme,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
 
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-    return NextResponse.json({ ok: true, subject, html });
+    return NextResponse.json({ ok: true, subject });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Generation failed";
     return NextResponse.json({ error: msg }, { status: 500 });

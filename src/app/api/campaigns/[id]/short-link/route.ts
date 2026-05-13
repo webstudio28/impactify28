@@ -28,8 +28,8 @@ export async function POST(req: Request, ctx: Ctx) {
   if (cErr || !campaign || campaign.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (campaign.status !== "draft") {
-    return NextResponse.json({ error: "Only draft campaigns can create links" }, { status: 400 });
+  if (campaign.status !== "draft" && campaign.status !== "rejected") {
+    return NextResponse.json({ error: "Only draft or rejected campaigns can create links" }, { status: 400 });
   }
 
   let body: { url?: string };

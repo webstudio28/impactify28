@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { formatResendFrom } from "@/lib/email/resend-from";
+import { COLOR_THEMES, THEME_KEYS, DEFAULT_THEME_KEY, type ThemeKey } from "@/lib/email/themes";
 
 type Profile = {
   logo_url: string | null;
@@ -17,10 +18,11 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [subject, setSubject] = useState("");
-  const [sendNow, setSendNow] = useState(true);
-  const [scheduledLocal, setScheduledLocal] = useState("");
+  const [colorTheme, setColorTheme] = useState<ThemeKey>(DEFAULT_THEME_KEY);
+  const [hasTemplateData, setHasTemplateData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [themeSaving, setThemeSaving] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
 
   const desktopSrc = `/api/campaigns/${campaignId}/email-preview?viewport=desktop`;
@@ -33,16 +35,19 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
     ]);
     if (!cRes.ok) throw new Error(t("loadFailed"));
     const cJson = (await cRes.json()) as {
-      campaign: { email_subject?: string | null; send_immediately?: boolean; scheduled_at?: string | null };
+      campaign: {
+        email_subject?: string | null;
+        email_color_theme?: string | null;
+        email_template_data?: Record<string, unknown> | null;
+      };
     };
     setSubject(typeof cJson.campaign.email_subject === "string" ? cJson.campaign.email_subject : "");
-    setSendNow(Boolean(cJson.campaign.send_immediately));
-    if (cJson.campaign.scheduled_at) {
-      const d = new Date(cJson.campaign.scheduled_at as string);
-      const pad = (n: number) => String(n).padStart(2, "0");
-      setScheduledLocal(
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-      );
+    setHasTemplateData(!!cJson.campaign.email_template_data);
+    if (
+      typeof cJson.campaign.email_color_theme === "string" &&
+      cJson.campaign.email_color_theme in COLOR_THEMES
+    ) {
+      setColorTheme(cJson.campaign.email_color_theme as ThemeKey);
     }
     if (pRes.ok) {
       const pJson = (await pRes.json()) as { profile?: Partial<Profile> };
@@ -63,6 +68,24 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
   useEffect(() => {
     void load().catch((e) => setError(e instanceof Error ? e.message : t("loadFailed")));
   }, [load, t]);
+
+  async function selectTheme(key: ThemeKey) {
+    if (key === colorTheme || themeSaving) return;
+    setColorTheme(key);
+    setThemeSaving(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_color_theme: key }),
+      });
+      setIframeKey((k) => k + 1);
+    } catch {
+      /* non-critical */
+    } finally {
+      setThemeSaving(false);
+    }
+  }
 
   async function uploadLogo(file: File) {
     setError(null);
@@ -92,67 +115,19 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
     window.open(u, "_blank", "noopener,noreferrer");
   }
 
-  async function saveTiming() {
-    setError(null);
-    setBusy(true);
-    try {
-      let scheduled_at: string | null = null;
-      if (!sendNow) {
-        if (!scheduledLocal) throw new Error(t("pickDateTime"));
-        scheduled_at = new Date(scheduledLocal).toISOString();
-      }
-      const res = await fetch(`/api/campaigns/${campaignId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          send_immediately: sendNow,
-          scheduled_at: sendNow ? null : scheduled_at,
-        }),
-      });
-      const j = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(j.error ?? t("saveFailed"));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("saveFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function launch() {
+  async function submitForApproval() {
     setError(null);
     setBusy(true);
     try {
       const pr = await fetch("/api/profile");
       const prj = (await pr.json()) as { profile?: Partial<Profile> };
       const fromLine = formatResendFrom(prj.profile?.sender_email ?? null, prj.profile?.sender_display_name ?? null);
-      if (!fromLine) {
-        throw new Error(t("senderRequired"));
-      }
-
-      let scheduled_at: string | null = null;
-      if (!sendNow) {
-        if (!scheduledLocal) throw new Error(t("pickDateTime"));
-        scheduled_at = new Date(scheduledLocal).toISOString();
-      }
-      const patch = await fetch(`/api/campaigns/${campaignId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          send_immediately: sendNow,
-          scheduled_at: sendNow ? null : scheduled_at,
-        }),
-      });
-      const pj = (await patch.json()) as { error?: string };
-      if (!patch.ok) throw new Error(pj.error ?? t("saveFailed"));
+      if (!fromLine) throw new Error(t("senderRequired"));
 
       const res = await fetch(`/api/campaigns/${campaignId}/finalize`, { method: "POST" });
       const j = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(j.error ?? t("finalizeFailed"));
-      try {
-        await fetch("/api/sms/process", { method: "POST" });
-      } catch {
-        /* dev */
-      }
+      try { await fetch("/api/sms/process", { method: "POST" }); } catch { /* dev */ }
       router.push("/dashboard/campaigns");
       router.refresh();
     } catch (e) {
@@ -174,6 +149,59 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       </div>
 
       {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+
+      {/* Color theme picker — only shown when template data exists */}
+      {hasTemplateData && (
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-ink">{t("themeTitle")}</h2>
+          <p className="mt-1 text-sm text-ink-muted">{t("themeHint")}</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {THEME_KEYS.map((key) => {
+              const theme = COLOR_THEMES[key];
+              const selected = colorTheme === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  title={theme.label}
+                  disabled={themeSaving}
+                  onClick={() => void selectTheme(key)}
+                  className={`group flex flex-col items-center gap-1.5 rounded-lg border-2 p-2 transition ${
+                    selected
+                      ? "border-accent shadow-md"
+                      : "border-transparent hover:border-zinc-300"
+                  }`}
+                >
+                  <div className="flex gap-0.5 overflow-hidden rounded-full shadow-sm">
+                    <div
+                      className="h-6 w-6"
+                      style={{ backgroundColor: theme.primary }}
+                    />
+                    <div
+                      className="h-6 w-6"
+                      style={{ backgroundColor: theme.accent }}
+                    />
+                    <div
+                      className="h-6 w-6"
+                      style={{ backgroundColor: theme.bg }}
+                    />
+                  </div>
+                  <span
+                    className={`max-w-[72px] text-center text-[10px] leading-tight ${
+                      selected ? "font-semibold text-ink" : "text-ink-muted"
+                    }`}
+                  >
+                    {theme.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {themeSaving && (
+            <p className="mt-2 text-xs text-ink-muted">{t("themeSaving")}</p>
+          )}
+        </section>
+      )}
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
         <h2 className="text-sm font-semibold text-ink">{t("logoTitle")}</h2>
@@ -217,18 +245,10 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink">{t("previewTitle")}</h2>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => openPreview("desktop")}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-muted"
-            >
+            <button type="button" onClick={() => openPreview("desktop")} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-muted">
               {t("openDesktop")}
             </button>
-            <button
-              type="button"
-              onClick={() => openPreview("mobile")}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-muted"
-            >
+            <button type="button" onClick={() => openPreview("mobile")} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-muted">
               {t("openMobile")}
             </button>
           </div>
@@ -260,39 +280,15 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">{t("timingTitle")}</h2>
-        <label className="mt-3 flex items-center gap-2 text-sm">
-          <input type="radio" checked={sendNow} onChange={() => setSendNow(true)} />
-          {t("startNow")}
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="radio" checked={!sendNow} onChange={() => setSendNow(false)} />
-          {t("scheduleLater")}
-        </label>
-        {!sendNow ? (
-          <input
-            type="datetime-local"
-            value={scheduledLocal}
-            onChange={(e) => setScheduledLocal(e.target.value)}
-            className="mt-2 w-full max-w-xs rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-          />
-        ) : null}
-        <div className="mt-4 flex flex-wrap gap-3">
+        <p className="text-sm text-ink-muted">{t("submitModerationHint")}</p>
+        <div className="mt-4">
           <button
             type="button"
             disabled={busy}
-            onClick={() => void saveTiming()}
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium hover:bg-surface-muted disabled:opacity-50"
-          >
-            {t("saveTiming")}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void launch()}
+            onClick={() => void submitForApproval()}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
           >
-            {busy ? t("launching") : t("launch")}
+            {busy ? t("submitting") : t("submitForApproval")}
           </button>
         </div>
         <p className="mt-3 text-xs text-ink-muted">{t("emailCompliance")}</p>

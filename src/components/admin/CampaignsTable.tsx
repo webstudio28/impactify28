@@ -18,7 +18,17 @@ type AdminCampaign = {
   email_count: number;
 };
 
-const STATUSES = ["draft", "running", "paused", "completed", "failed", "cancelled"];
+const STATUSES = [
+  "draft",
+  "pending_approval",
+  "ready_to_launch",
+  "rejected",
+  "running",
+  "paused",
+  "completed",
+  "failed",
+  "cancelled",
+];
 const CHANNELS = ["sms", "email"];
 
 export function CampaignsTable({ locale }: { locale: string }) {

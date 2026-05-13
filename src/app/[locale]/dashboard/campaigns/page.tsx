@@ -14,7 +14,7 @@ export default async function CampaignsPage({
   const supabase = await createClient();
   const { data: campaigns, error: listError } = await supabase
     .from("campaigns")
-    .select("id, name, status, created_at, scheduled_at")
+    .select("id, name, status, created_at, scheduled_at, moderation_note")
     .order("created_at", { ascending: false });
 
   const list = campaigns ?? [];

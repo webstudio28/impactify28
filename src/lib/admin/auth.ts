@@ -35,7 +35,8 @@ export async function requireAdminApi(): Promise<{
 
 /**
  * Used in server components (pages/layouts).
- * Returns { userId, role } or null if not authenticated/not admin.
+ * Returns { userId, email } if the current session belongs to an admin user, otherwise null.
+ * Errors are logged so intermittent auth failures are visible in server logs.
  */
 export async function getAdminUser(): Promise<{
   userId: string;
@@ -45,18 +46,29 @@ export async function getAdminUser(): Promise<{
     const supabase = await createClient();
     const {
       data: { user },
+      error: authErr,
     } = await supabase.auth.getUser();
+    if (authErr) {
+      console.error("[getAdminUser] auth.getUser error:", authErr.message);
+      return null;
+    }
     if (!user) return null;
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileErr } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single();
 
+    if (profileErr) {
+      console.error("[getAdminUser] profile fetch error:", profileErr.message);
+      return null;
+    }
+
     if (profile?.role !== "admin") return null;
     return { userId: user.id, email: user.email };
-  } catch {
+  } catch (e) {
+    console.error("[getAdminUser] unexpected error:", e);
     return null;
   }
 }

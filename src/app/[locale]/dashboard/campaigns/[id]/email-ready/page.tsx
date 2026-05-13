@@ -26,7 +26,7 @@ export default async function EmailReadyPage({
   if (error || !campaign) {
     redirect(`/${locale}/dashboard/campaigns`);
   }
-  if (campaign.channel !== "email" || campaign.status !== "draft") {
+  if (campaign.channel !== "email" || (campaign.status !== "draft" && campaign.status !== "rejected")) {
     redirect(`/${locale}/dashboard/campaigns`);
   }
   const html = typeof campaign.email_html === "string" ? campaign.email_html.trim() : "";

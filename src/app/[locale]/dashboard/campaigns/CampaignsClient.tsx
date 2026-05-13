@@ -10,6 +10,7 @@ export type CampaignRow = {
   status: string;
   created_at: string;
   scheduled_at: string | null;
+  moderation_note?: string | null;
 };
 
 type OutboundMsg = {
@@ -120,6 +121,7 @@ export function CampaignsTable({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [startBusyId, setStartBusyId] = useState<string | null>(null);
 
   async function control(id: string, action: "pause" | "resume") {
     setBusyId(id);
@@ -163,9 +165,79 @@ export function CampaignsTable({
     }
   }
 
+  async function startCampaign(id: string) {
+    setStartBusyId(id);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/start`, { method: "POST" });
+      const j = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        alert(j.error ?? t("startError"));
+        return;
+      }
+      try {
+        await fetch("/api/sms/process", { method: "POST" });
+      } catch {
+        /* optional dev */
+      }
+      router.refresh();
+    } finally {
+      setStartBusyId(null);
+    }
+  }
+
   function resultsLabel(status: string) {
     if (status === "completed" || status === "failed" || status === "cancelled") return tm("buttonLog");
     return tm("buttonLive");
+  }
+
+  const sendLifecycleStatuses = new Set([
+    "running",
+    "paused",
+    "queued",
+    "completed",
+    "failed",
+    "cancelled",
+  ]);
+
+  function renderStatus(c: CampaignRow) {
+    if (c.status === "draft") {
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex w-fit rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-ink">
+            {t("statusDraft")}
+          </span>
+          <span className="text-xs text-ink-muted">{t("draftNotStarted")}</span>
+        </div>
+      );
+    }
+    if (c.status === "pending_approval") {
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex w-fit rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
+            {t("statusPendingApproval")}
+          </span>
+          <span className="text-xs text-ink-muted">{t("pendingApprovalHint")}</span>
+        </div>
+      );
+    }
+    if (c.status === "ready_to_launch") {
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex w-fit rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-900">
+            {t("statusReadyToLaunch")}
+          </span>
+          <span className="text-xs text-ink-muted">{t("readyToLaunchHint")}</span>
+        </div>
+      );
+    }
+    if (c.status === "rejected") {
+      return (
+        <span className="inline-flex w-fit rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800">
+          {t("statusRejected")}
+        </span>
+      );
+    }
+    return <span className="capitalize">{c.status}</span>;
   }
 
   return (
@@ -195,19 +267,16 @@ export function CampaignsTable({
             ) : (
               campaigns.map((c) => (
                 <tr key={c.id} className="border-b border-zinc-50 last:border-0">
-                  <td className="px-4 py-3 font-medium text-ink">{c.name}</td>
-                  <td className="px-4 py-3 text-ink-muted">
-                    {c.status === "draft" ? (
-                      <div className="flex flex-col gap-1">
-                        <span className="inline-flex w-fit rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-ink">
-                          {t("statusDraft")}
-                        </span>
-                        <span className="text-xs text-ink-muted">{t("draftNotStarted")}</span>
-                      </div>
-                    ) : (
-                      <span className="capitalize">{c.status}</span>
-                    )}
+                  <td className="px-4 py-3 text-ink">
+                    <div className="font-medium text-ink">{c.name}</div>
+                    {c.status === "rejected" && c.moderation_note ? (
+                      <p className="mt-1 text-xs font-medium text-red-600">{c.moderation_note}</p>
+                    ) : null}
+                    {c.status === "rejected" ? (
+                      <p className="mt-1 text-xs text-ink-muted">{t("rejectedPleaseEdit")}</p>
+                    ) : null}
                   </td>
+                  <td className="px-4 py-3 text-ink-muted">{renderStatus(c)}</td>
                   <td className="px-4 py-3 text-ink-muted">
                     {c.scheduled_at ? formatAppDate(c.scheduled_at, locale, "datetime") : dash}
                   </td>
@@ -224,7 +293,25 @@ export function CampaignsTable({
                           {t("continue")}
                         </Link>
                       ) : null}
-                      {c.status !== "draft" ? (
+                      {c.status === "rejected" ? (
+                        <Link
+                          href={`/dashboard/campaigns/new?id=${c.id}`}
+                          className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"
+                        >
+                          {t("editCampaign")}
+                        </Link>
+                      ) : null}
+                      {c.status === "ready_to_launch" ? (
+                        <button
+                          type="button"
+                          disabled={startBusyId === c.id}
+                          onClick={() => void startCampaign(c.id)}
+                          className="inline-flex rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-accent-hover disabled:opacity-50"
+                        >
+                          {startBusyId === c.id ? t("startingCampaign") : t("startCampaign")}
+                        </button>
+                      ) : null}
+                      {sendLifecycleStatuses.has(c.status) ? (
                         <>
                           {c.status === "running" || c.status === "queued" ? (
                             <button

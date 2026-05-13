@@ -80,6 +80,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Short-link redirect — must run before intl so next-intl doesn't steal /{code}
+  if (/^\/[a-z0-9]{6}$/.test(pathname)) {
+    return NextResponse.rewrite(new URL(`/api/r${pathname}`, request.url));
+  }
+
   if (pathname.startsWith("/api")) {
     let response = NextResponse.next({ request });
     return refreshSupabaseSession(request, response);

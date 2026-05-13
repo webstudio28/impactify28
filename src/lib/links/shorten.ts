@@ -19,12 +19,17 @@ export async function shortenUrl(
 ): Promise<string> {
   const supabase = await createClient();
 
+  // Remove previous short_links rows for this campaign from the DB so only one
+  // appears in analytics. We intentionally leave the Redis redirect keys intact
+  // — old codes already sent in SMS messages must keep resolving.
+  await supabase.from("short_links").delete().eq("campaign_id", campaignId);
+
   let code = generateCode();
 
   // Ensure uniqueness — retry up to 5 times on collision
   for (let attempt = 0; attempt < 5; attempt++) {
-    const existing = await redis.get(`link:${code}`);
-    if (!existing) break;
+    const taken = await redis.get(`link:${code}`);
+    if (!taken) break;
     code = generateCode();
   }
 

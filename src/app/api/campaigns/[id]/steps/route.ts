@@ -25,8 +25,8 @@ export async function PUT(req: Request, ctx: Ctx) {
     .single();
 
   if (exErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.status !== "draft") {
-    return NextResponse.json({ error: "Only draft campaigns can be edited" }, { status: 400 });
+  if (existing.status !== "draft" && existing.status !== "rejected") {
+    return NextResponse.json({ error: "Only draft or rejected campaigns can be edited" }, { status: 400 });
   }
 
   let steps: StepInput[] = [];
