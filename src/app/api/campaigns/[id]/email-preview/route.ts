@@ -4,6 +4,7 @@ import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 import { wrapEmailPreviewDocument } from "@/lib/email/preview-document";
 import { renderEmailTemplate, parseTemplateData } from "@/lib/email/templates/render";
 import { DEFAULT_THEME_KEY } from "@/lib/email/themes";
+import { getEmailFont } from "@/lib/email/fonts";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -20,7 +21,7 @@ export async function GET(req: Request, ctx: Ctx) {
 
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
-    .select("id, user_id, email_html, email_template_data, email_color_theme, channel")
+    .select("id, user_id, email_html, email_template_data, email_color_theme, email_font_family, email_emphasis_preset, channel")
     .eq("id", id)
     .single();
 
@@ -41,7 +42,15 @@ export async function GET(req: Request, ctx: Ctx) {
       typeof campaign.email_color_theme === "string" && campaign.email_color_theme.trim()
         ? campaign.email_color_theme
         : DEFAULT_THEME_KEY;
-    const { html } = renderEmailTemplate(templateData, colorTheme);
+    const fontKey =
+      typeof campaign.email_font_family === "string" && campaign.email_font_family.trim()
+        ? campaign.email_font_family.trim()
+        : undefined;
+    const emphasisKey =
+      typeof campaign.email_emphasis_preset === "string" && campaign.email_emphasis_preset.trim()
+        ? campaign.email_emphasis_preset.trim()
+        : undefined;
+    const { html } = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey);
     htmlRaw = html;
   } else {
     htmlRaw = typeof campaign.email_html === "string" ? campaign.email_html : "";
@@ -51,7 +60,15 @@ export async function GET(req: Request, ctx: Ctx) {
   }
 
   const merged = injectLogoIntoHtml(htmlRaw, profile?.logo_url ?? null);
-  const doc = wrapEmailPreviewDocument(merged, narrow);
+  const fontDef = getEmailFont(
+    typeof campaign.email_font_family === "string" && campaign.email_font_family.trim()
+      ? campaign.email_font_family
+      : undefined
+  );
+  const doc = wrapEmailPreviewDocument(merged, narrow, {
+    googleFontsCssHref: fontDef.googleFontsCssHref,
+    stackCss: fontDef.stackCss,
+  });
 
   return new NextResponse(doc, {
     status: 200,

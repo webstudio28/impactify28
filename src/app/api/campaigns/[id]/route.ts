@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { EMAIL_FONTS } from "@/lib/email/fonts";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const CAMPAIGN_SELECT =
-  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input, email_template_type, email_template_data, email_color_theme, moderation_note";
+  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input, email_template_type, email_template_data, email_color_theme, email_font_family, email_emphasis_preset, moderation_note";
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -86,6 +87,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
       email_template_type?: string | null;
       email_template_data?: Record<string, unknown> | null;
       email_color_theme?: string | null;
+      email_font_family?: string | null;
+      email_emphasis_preset?: string | null;
     };
     if (typeof body.name === "string") payload.name = body.name.trim() || "Untitled campaign";
     if ("audience_id" in body) payload.audience_id = body.audience_id;
@@ -130,6 +133,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     if (typeof body.email_color_theme === "string" && body.email_color_theme.trim()) {
       payload.email_color_theme = body.email_color_theme.trim();
+    }
+    if (typeof body.email_font_family === "string" && body.email_font_family.trim()) {
+      const fk = body.email_font_family.trim();
+      if (fk in EMAIL_FONTS) payload.email_font_family = fk;
+    }
+    if (typeof body.email_emphasis_preset === "string" && body.email_emphasis_preset.trim()) {
+      const ek = body.email_emphasis_preset.trim();
+      if (ek === "balanced" || ek === "bold") payload.email_emphasis_preset = ek;
     }
 
     payload.updated_at = new Date().toISOString();

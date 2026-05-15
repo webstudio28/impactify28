@@ -5,6 +5,12 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { formatResendFrom } from "@/lib/email/resend-from";
 import { COLOR_THEMES, THEME_KEYS, DEFAULT_THEME_KEY, type ThemeKey } from "@/lib/email/themes";
+import { EMAIL_FONTS, EMAIL_FONT_KEYS, DEFAULT_EMAIL_FONT_KEY, type EmailFontKey } from "@/lib/email/fonts";
+import {
+  DEFAULT_EMAIL_EMPHASIS_PRESET,
+  EMAIL_EMPHASIS_PRESETS,
+  type EmailEmphasisPreset,
+} from "@/lib/email/typography-emphasis";
 
 type Profile = {
   logo_url: string | null;
@@ -19,10 +25,14 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [subject, setSubject] = useState("");
   const [colorTheme, setColorTheme] = useState<ThemeKey>(DEFAULT_THEME_KEY);
+  const [emailFont, setEmailFont] = useState<EmailFontKey>(DEFAULT_EMAIL_FONT_KEY);
+  const [emailEmphasis, setEmailEmphasis] = useState<EmailEmphasisPreset>(DEFAULT_EMAIL_EMPHASIS_PRESET);
   const [hasTemplateData, setHasTemplateData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
+  const [fontSaving, setFontSaving] = useState(false);
+  const [emphasisSaving, setEmphasisSaving] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
 
   const desktopSrc = `/api/campaigns/${campaignId}/email-preview?viewport=desktop`;
@@ -38,6 +48,8 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       campaign: {
         email_subject?: string | null;
         email_color_theme?: string | null;
+        email_font_family?: string | null;
+        email_emphasis_preset?: string | null;
         email_template_data?: Record<string, unknown> | null;
       };
     };
@@ -48,6 +60,23 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       cJson.campaign.email_color_theme in COLOR_THEMES
     ) {
       setColorTheme(cJson.campaign.email_color_theme as ThemeKey);
+    }
+    if (
+      typeof cJson.campaign.email_font_family === "string" &&
+      cJson.campaign.email_font_family.trim() &&
+      cJson.campaign.email_font_family in EMAIL_FONTS
+    ) {
+      setEmailFont(cJson.campaign.email_font_family as EmailFontKey);
+    } else {
+      setEmailFont(DEFAULT_EMAIL_FONT_KEY);
+    }
+    if (
+      typeof cJson.campaign.email_emphasis_preset === "string" &&
+      (cJson.campaign.email_emphasis_preset === "balanced" || cJson.campaign.email_emphasis_preset === "bold")
+    ) {
+      setEmailEmphasis(cJson.campaign.email_emphasis_preset);
+    } else {
+      setEmailEmphasis(DEFAULT_EMAIL_EMPHASIS_PRESET);
     }
     if (pRes.ok) {
       const pJson = (await pRes.json()) as { profile?: Partial<Profile> };
@@ -70,7 +99,7 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
   }, [load, t]);
 
   async function selectTheme(key: ThemeKey) {
-    if (key === colorTheme || themeSaving) return;
+    if (key === colorTheme || themeSaving || fontSaving || emphasisSaving) return;
     setColorTheme(key);
     setThemeSaving(true);
     try {
@@ -107,6 +136,42 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       setError(e instanceof Error ? e.message : t("logoFailed"));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function selectEmailFont(key: EmailFontKey) {
+    if (key === emailFont || fontSaving || themeSaving || emphasisSaving) return;
+    setEmailFont(key);
+    setFontSaving(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_font_family: key }),
+      });
+      setIframeKey((k) => k + 1);
+    } catch {
+      /* non-critical */
+    } finally {
+      setFontSaving(false);
+    }
+  }
+
+  async function selectEmailEmphasis(key: EmailEmphasisPreset) {
+    if (key === emailEmphasis || emphasisSaving || themeSaving || fontSaving) return;
+    setEmailEmphasis(key);
+    setEmphasisSaving(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_emphasis_preset: key }),
+      });
+      setIframeKey((k) => k + 1);
+    } catch {
+      /* non-critical */
+    } finally {
+      setEmphasisSaving(false);
     }
   }
 
@@ -150,55 +215,116 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
 
       {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
-      {/* Color theme picker — only shown when template data exists */}
+      {/* Color theme + typography + emphasis — only when template data exists */}
       {hasTemplateData && (
-        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-ink">{t("themeTitle")}</h2>
-          <p className="mt-1 text-sm text-ink-muted">{t("themeHint")}</p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {THEME_KEYS.map((key) => {
-              const theme = COLOR_THEMES[key];
-              const selected = colorTheme === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  title={theme.label}
-                  disabled={themeSaving}
-                  onClick={() => void selectTheme(key)}
-                  className={`group flex flex-col items-center gap-1.5 rounded-lg border-2 p-2 transition ${
-                    selected
-                      ? "border-accent shadow-md"
-                      : "border-transparent hover:border-zinc-300"
-                  }`}
-                >
-                  <div className="flex gap-0.5 overflow-hidden rounded-full shadow-sm">
-                    <div
-                      className="h-6 w-6"
-                      style={{ backgroundColor: theme.primary }}
-                    />
-                    <div
-                      className="h-6 w-6"
-                      style={{ backgroundColor: theme.accent }}
-                    />
-                    <div
-                      className="h-6 w-6"
-                      style={{ backgroundColor: theme.bg }}
-                    />
-                  </div>
-                  <span
-                    className={`max-w-[72px] text-center text-[10px] leading-tight ${
-                      selected ? "font-semibold text-ink" : "text-ink-muted"
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm space-y-6">
+          <div className="grid gap-8 lg:grid-cols-2 lg:gap-10">
+            <div>
+              <h2 className="text-sm font-semibold text-ink">{t("themeTitle")}</h2>
+              <p className="mt-1 text-sm text-ink-muted">{t("themeHint")}</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {THEME_KEYS.map((key) => {
+                  const theme = COLOR_THEMES[key];
+                  const selected = colorTheme === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      title={theme.label}
+                      disabled={themeSaving || fontSaving || emphasisSaving}
+                      onClick={() => void selectTheme(key)}
+                      className={`group flex flex-col items-center gap-1.5 rounded-lg border-2 p-2 transition ${
+                        selected
+                          ? "border-accent shadow-md"
+                          : "border-transparent hover:border-zinc-300"
+                      }`}
+                    >
+                      <div className="flex gap-0.5 overflow-hidden rounded-full shadow-sm">
+                        <div className="h-6 w-6" style={{ backgroundColor: theme.primary }} />
+                        <div className="h-6 w-6" style={{ backgroundColor: theme.accent }} />
+                        <div className="h-6 w-6" style={{ backgroundColor: theme.bg }} />
+                      </div>
+                      <span
+                        className={`max-w-[72px] text-center text-[10px] leading-tight ${
+                          selected ? "font-semibold text-ink" : "text-ink-muted"
+                        }`}
+                      >
+                        {theme.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-zinc-100 pt-6 lg:border-t-0 lg:border-l lg:border-zinc-100 lg:pt-0 lg:pl-8">
+              <h2 className="text-sm font-semibold text-ink">{t("fontTitle")}</h2>
+              <p className="mt-1 text-sm text-ink-muted">{t("fontHint")}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {EMAIL_FONT_KEYS.map((key) => {
+                  const def = EMAIL_FONTS[key];
+                  const selected = emailFont === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      title={def.label}
+                      disabled={themeSaving || fontSaving || emphasisSaving}
+                      onClick={() => void selectEmailFont(key)}
+                      className={`flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-lg border-2 px-2 py-2 transition ${
+                        selected ? "border-accent bg-accent/5 shadow-md" : "border-transparent hover:border-zinc-300"
+                      }`}
+                    >
+                      <span
+                        className={`text-sm font-semibold leading-none ${selected ? "text-ink" : "text-ink-muted"}`}
+                        style={{ fontFamily: def.stackCss }}
+                      >
+                        Aa Бг
+                      </span>
+                      <span
+                        className={`max-w-[88px] text-center text-[10px] leading-tight ${
+                          selected ? "font-semibold text-ink" : "text-ink-muted"
+                        }`}
+                      >
+                        {def.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-100 pt-5">
+            <h2 className="text-sm font-semibold text-ink">{t("emphasisTitle")}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{t("emphasisHint")}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {EMAIL_EMPHASIS_PRESETS.map((key) => {
+                const selected = emailEmphasis === key;
+                const label = key === "bold" ? t("emphasisBold") : t("emphasisBalanced");
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={themeSaving || fontSaving || emphasisSaving}
+                    onClick={() => void selectEmailEmphasis(key)}
+                    className={`rounded-lg border-2 px-4 py-2 text-sm font-medium transition ${
+                      selected
+                        ? "border-accent bg-accent/5 text-ink shadow-sm"
+                        : "border-transparent bg-zinc-50 text-ink-muted hover:border-zinc-300 hover:text-ink"
                     }`}
                   >
-                    {theme.label}
-                  </span>
-                </button>
-              );
-            })}
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          {themeSaving && (
-            <p className="mt-2 text-xs text-ink-muted">{t("themeSaving")}</p>
+
+          {(themeSaving || fontSaving || emphasisSaving) && (
+            <p className="text-xs text-ink-muted">
+              {themeSaving ? t("themeSaving") : fontSaving ? t("fontSaving") : t("emphasisSaving")}
+            </p>
           )}
         </section>
       )}

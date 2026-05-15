@@ -364,7 +364,15 @@
     "emailCompliance": "Compliance: send only to people who opted in to marketing email. This app does not track consent for you.",
     "themeTitle": "Color theme",
     "themeHint": "Pick a color scheme for your email. The preview updates instantly.",
-    "themeSaving": "Applying theme…"
+    "themeSaving": "Applying theme…",
+    "fontTitle": "Typography",
+    "fontHint": "Pick a font for headings and body text. The preview updates instantly.",
+    "fontSaving": "Applying font…",
+    "emphasisTitle": "Text emphasis",
+    "emphasisHint": "Bold keeps strong headlines and buttons (default). Balanced softens weights for a calmer look while keeping hierarchy.",
+    "emphasisBold": "Bold",
+    "emphasisBalanced": "Balanced",
+    "emphasisSaving": "Applying emphasis…"
   },
   "emails": {
     "title": "Emails",

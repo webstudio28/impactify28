@@ -191,6 +191,8 @@ export function CampaignWizard() {
   const [emailTemplateType, setEmailTemplateType] = useState<EmailTemplateType | null>(null);
   const [emailInitialData, setEmailInitialData] = useState<EmailTemplateData | null>(null);
   const [emailInitialColorTheme, setEmailInitialColorTheme] = useState<string | null>(null);
+  const [emailInitialFont, setEmailInitialFont] = useState<string | null>(null);
+  const [emailInitialEmphasis, setEmailInitialEmphasis] = useState<string | null>(null);
 
   const maxStep = channel === "email" ? 5 : 4;
 
@@ -211,6 +213,8 @@ export function CampaignWizard() {
         email_template_data?: unknown;
         email_template_type?: string | null;
         email_color_theme?: string | null;
+        email_font_family?: string | null;
+        email_emphasis_preset?: string | null;
       };
       steps: { step_order: number; body: string; link_url: string | null; delay_after_previous_hours: number }[];
     };
@@ -230,6 +234,14 @@ export function CampaignWizard() {
         setEmailInitialData(templateData);
         setEmailTemplateType(templateData.templateType);
         setEmailInitialColorTheme(c.email_color_theme ?? null);
+        setEmailInitialFont(
+          typeof c.email_font_family === "string" && c.email_font_family.trim() ? c.email_font_family : null
+        );
+        setEmailInitialEmphasis(
+          typeof c.email_emphasis_preset === "string" && c.email_emphasis_preset.trim()
+            ? c.email_emphasis_preset
+            : null
+        );
         setStep(5);
         return;
       }
@@ -518,6 +530,8 @@ export function CampaignWizard() {
           templateType={emailTemplateType}
           initialData={emailInitialData}
           initialColorTheme={emailInitialColorTheme}
+          initialEmailFont={emailInitialFont}
+          initialEmailEmphasis={emailInitialEmphasis}
           onBack={() => { setError(null); setStep(4); }}
           onSubmitted={() => { router.push("/dashboard/campaigns"); router.refresh(); }}
         />

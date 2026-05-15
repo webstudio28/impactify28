@@ -77,7 +77,15 @@ export async function POST(_req: Request, ctx: Ctx) {
         typeof campaign.email_color_theme === "string" && campaign.email_color_theme.trim()
           ? (campaign.email_color_theme as string)
           : DEFAULT_THEME_KEY;
-      const rendered = renderEmailTemplate(templateData, colorTheme);
+      const fontKey =
+        typeof campaign.email_font_family === "string" && campaign.email_font_family.trim()
+          ? campaign.email_font_family.trim()
+          : undefined;
+      const emphasisKey =
+        typeof campaign.email_emphasis_preset === "string" && campaign.email_emphasis_preset.trim()
+          ? campaign.email_emphasis_preset.trim()
+          : undefined;
+      const rendered = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey);
       emailSubject = rendered.subject;
       emailHtml = rendered.html;
 

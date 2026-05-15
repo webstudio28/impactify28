@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { renderEmailTemplate } from "@/lib/email/templates/render";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 import { wrapEmailPreviewDocument } from "@/lib/email/preview-document";
 import { COLOR_THEMES, THEME_KEYS, DEFAULT_THEME_KEY, type ThemeKey } from "@/lib/email/themes";
+import { EMAIL_FONTS, EMAIL_FONT_KEYS, DEFAULT_EMAIL_FONT_KEY, getEmailFont, type EmailFontKey } from "@/lib/email/fonts";
+import {
+  DEFAULT_EMAIL_EMPHASIS_PRESET,
+  EMAIL_EMPHASIS_PRESETS,
+  type EmailEmphasisPreset,
+} from "@/lib/email/typography-emphasis";
 import type { EmailTemplateData, EmailTemplateType, ProductItem } from "@/lib/email/templates/types";
 import { ProductsEditor, ListEditor } from "./EmailFormHelpers";
 
@@ -108,6 +114,8 @@ type Props = {
   templateType: EmailTemplateType;
   initialData?: EmailTemplateData | null;
   initialColorTheme?: string | null;
+  initialEmailFont?: string | null;
+  initialEmailEmphasis?: string | null;
   onBack: () => void;
   onSubmitted: () => void;
 };
@@ -117,6 +125,8 @@ export function EmailBuilderStep({
   templateType,
   initialData,
   initialColorTheme,
+  initialEmailFont,
+  initialEmailEmphasis,
   onBack,
   onSubmitted,
 }: Props) {
@@ -133,6 +143,16 @@ export function EmailBuilderStep({
       ? (initialColorTheme as ThemeKey)
       : DEFAULT_THEME_KEY
   );
+  const [emailFont, setEmailFont] = useState<EmailFontKey>(() => {
+    const k = initialEmailFont?.trim();
+    if (k && k in EMAIL_FONTS) return k as EmailFontKey;
+    return DEFAULT_EMAIL_FONT_KEY;
+  });
+  const [emailEmphasis, setEmailEmphasis] = useState<EmailEmphasisPreset>(() => {
+    const e = initialEmailEmphasis?.trim();
+    if (e === "balanced" || e === "bold") return e;
+    return DEFAULT_EMAIL_EMPHASIS_PRESET;
+  });
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
   const [previewHtml, setPreviewHtml] = useState("");
@@ -180,13 +200,19 @@ export function EmailBuilderStep({
   // Re-render preview whenever data, theme, logo, viewport, or refresh tick changes
   useEffect(() => {
     try {
-      const { html } = renderEmailTemplate(debouncedData, colorTheme);
+      const { html } = renderEmailTemplate(debouncedData, colorTheme, emailFont, emailEmphasis);
       const withLogo = injectLogoIntoHtml(html, logoUrl);
-      setPreviewHtml(wrapEmailPreviewDocument(withLogo, viewport === "mobile"));
+      const fd = getEmailFont(emailFont);
+      setPreviewHtml(
+        wrapEmailPreviewDocument(withLogo, viewport === "mobile", {
+          googleFontsCssHref: fd.googleFontsCssHref,
+          stackCss: fd.stackCss,
+        })
+      );
     } catch {
       // keep previous preview if render fails during partial input
     }
-  }, [debouncedData, colorTheme, logoUrl, viewport, refreshTick]);
+  }, [debouncedData, colorTheme, emailFont, emailEmphasis, logoUrl, viewport, refreshTick]);
 
   async function uploadLogo(file: File) {
     setLogoUploading(true);
@@ -202,6 +228,24 @@ export function EmailBuilderStep({
     } finally {
       setLogoUploading(false);
     }
+  }
+
+  async function selectEmailEmphasis(key: EmailEmphasisPreset) {
+    setEmailEmphasis(key);
+    void fetch(`/api/campaigns/${campaignId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email_emphasis_preset: key }),
+    });
+  }
+
+  async function selectEmailFont(key: EmailFontKey) {
+    setEmailFont(key);
+    void fetch(`/api/campaigns/${campaignId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email_font_family: key }),
+    });
   }
 
   async function selectTheme(key: ThemeKey) {
@@ -251,7 +295,7 @@ export function EmailBuilderStep({
       const genRes = await fetch(`/api/campaigns/${campaignId}/generate-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateData, colorTheme }),
+        body: JSON.stringify({ templateData, colorTheme, fontFamily: emailFont, emphasisPreset: emailEmphasis }),
       });
       const gj = (await genRes.json()) as { error?: string };
       if (!genRes.ok) throw new Error(gj.error ?? t("generateFailed"));
@@ -512,37 +556,100 @@ export function EmailBuilderStep({
           )}
         </div>
 
-        {/* Color theme picker */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm space-y-3">
-          <div>
-            <p className="text-xs font-semibold text-ink">{tReady("themeTitle")}</p>
-            <p className="mt-0.5 text-xs text-ink-muted">{tReady("themeHint")}</p>
+        {/* Color theme + typography + emphasis */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm space-y-5">
+          <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+            <div className="space-y-3 md:pr-2">
+              <div>
+                <p className="text-xs font-semibold text-ink">{tReady("themeTitle")}</p>
+                <p className="mt-0.5 text-xs text-ink-muted">{tReady("themeHint")}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {THEME_KEYS.map((key) => {
+                  const theme = COLOR_THEMES[key];
+                  const selected = colorTheme === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      title={theme.label}
+                      onClick={() => void selectTheme(key)}
+                      className={`flex flex-col items-center gap-1 rounded-lg border-2 p-1.5 transition ${
+                        selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
+                      }`}
+                    >
+                      <div className="flex overflow-hidden rounded-full shadow-sm">
+                        <div className="h-5 w-5" style={{ backgroundColor: theme.primary }} />
+                        <div className="h-5 w-5" style={{ backgroundColor: theme.accent }} />
+                        <div className="h-5 w-5" style={{ backgroundColor: theme.bg }} />
+                      </div>
+                      <span className={`max-w-[72px] text-center text-[9px] leading-tight ${selected ? "font-semibold text-ink" : "text-ink-muted"}`}>
+                        {theme.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3 border-t border-zinc-100 pt-5 md:border-t-0 md:border-l md:pt-0 md:pl-6 md:border-zinc-100">
+              <div>
+                <p className="text-xs font-semibold text-ink">{tReady("fontTitle")}</p>
+                <p className="mt-0.5 text-xs text-ink-muted">{tReady("fontHint")}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {EMAIL_FONT_KEYS.map((key) => {
+                  const def = EMAIL_FONTS[key];
+                  const selected = emailFont === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      title={def.label}
+                      onClick={() => void selectEmailFont(key)}
+                      className={`flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-lg border-2 px-2 py-1.5 transition ${
+                        selected ? "border-accent bg-accent/5 shadow-sm" : "border-transparent hover:border-zinc-200"
+                      }`}
+                    >
+                      <span
+                        className={`text-[13px] font-semibold leading-none ${selected ? "text-ink" : "text-ink-muted"}`}
+                        style={{ fontFamily: def.stackCss }}
+                      >
+                        Aa Бг
+                      </span>
+                      <span className={`max-w-[88px] text-center text-[9px] leading-tight ${selected ? "font-medium text-ink" : "text-ink-muted"}`}>
+                        {def.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {THEME_KEYS.map((key) => {
-              const theme = COLOR_THEMES[key];
-              const selected = colorTheme === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  title={theme.label}
-                  onClick={() => void selectTheme(key)}
-                  className={`flex flex-col items-center gap-1 rounded-lg border-2 p-1.5 transition ${
-                    selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
-                  }`}
-                >
-                  <div className="flex overflow-hidden rounded-full shadow-sm">
-                    <div className="h-5 w-5" style={{ backgroundColor: theme.primary }} />
-                    <div className="h-5 w-5" style={{ backgroundColor: theme.accent }} />
-                    <div className="h-5 w-5" style={{ backgroundColor: theme.bg }} />
-                  </div>
-                  <span className={`max-w-[60px] text-center text-[9px] leading-tight ${selected ? "font-semibold text-ink" : "text-ink-muted"}`}>
-                    {theme.label}
-                  </span>
-                </button>
-              );
-            })}
+
+          <div className="border-t border-zinc-100 pt-4">
+            <p className="text-xs font-semibold text-ink">{tReady("emphasisTitle")}</p>
+            <p className="mt-0.5 text-xs text-ink-muted">{tReady("emphasisHint")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {EMAIL_EMPHASIS_PRESETS.map((key) => {
+                const selected = emailEmphasis === key;
+                const label = key === "bold" ? tReady("emphasisBold") : tReady("emphasisBalanced");
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => void selectEmailEmphasis(key)}
+                    className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition ${
+                      selected
+                        ? "border-accent bg-accent/5 text-ink shadow-sm"
+                        : "border-transparent bg-zinc-50 text-ink-muted hover:border-zinc-200 hover:text-ink"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

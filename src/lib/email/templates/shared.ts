@@ -1,3 +1,5 @@
+import type { EmailFontDefinition } from "../fonts";
+import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { ProductItem } from "./types";
 
@@ -9,7 +11,8 @@ export function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function emailWrapper(content: string, theme: ColorTheme): string {
+export function emailWrapper(content: string, theme: ColorTheme, font: EmailFontDefinition): string {
+  const ff = font.stackCss;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,15 +20,18 @@ export function emailWrapper(content: string, theme: ColorTheme): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>Email</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="${font.googleFontsCssHref}" />
 </head>
-<body style="margin:0;padding:0;background-color:${theme.bg};font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${theme.bg};">
+<body style="margin:0;padding:0;background-color:${theme.bg};font-family:${ff};-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${theme.bg};font-family:${ff};">
     <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <td align="center" style="padding:32px 16px;font-family:${ff};">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:${ff};">
           {{COMPANY_LOGO}}
           ${content}
-          ${emailFooter(theme)}
+          ${emailFooter(theme, ff)}
         </table>
       </td>
     </tr>
@@ -34,13 +40,13 @@ export function emailWrapper(content: string, theme: ColorTheme): string {
 </html>`;
 }
 
-function emailFooter(theme: ColorTheme): string {
+function emailFooter(theme: ColorTheme, fontFamily: string): string {
   return `<tr>
-    <td style="background-color:${theme.bgLight};padding:28px 40px;text-align:center;border-top:1px solid rgba(0,0,0,0.06);">
-      <p style="margin:0;font-size:12px;color:${theme.textMuted};line-height:1.6;">
+    <td style="background-color:${theme.bgLight};padding:28px 40px;text-align:center;border-top:1px solid rgba(0,0,0,0.06);font-family:${fontFamily};">
+      <p style="margin:0;font-size:12px;color:${theme.textMuted};line-height:1.6;font-family:${fontFamily};">
         You are receiving this email because you subscribed to our marketing updates.
       </p>
-      <p style="margin:8px 0 0;font-size:12px;color:${theme.textMuted};">
+      <p style="margin:8px 0 0;font-size:12px;color:${theme.textMuted};font-family:${fontFamily};">
         <a href="#" style="color:${theme.accent};text-decoration:underline;">Unsubscribe</a>
         &nbsp;&middot;&nbsp;
         <a href="#" style="color:${theme.accent};text-decoration:underline;">View in browser</a>
@@ -57,17 +63,24 @@ export function logoRow(): string {
   </tr>`;
 }
 
-export function ctaButton(text: string, url: string, theme: ColorTheme): string {
+export function ctaButton(
+  text: string,
+  url: string,
+  theme: ColorTheme,
+  font: EmailFontDefinition,
+  ctaWeight: number
+): string {
+  const ff = font.stackCss;
   return `<table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
     <tr>
       <td style="background-color:${theme.accent};border-radius:6px;">
-        <a href="${esc(url)}" target="_blank" style="display:inline-block;padding:14px 36px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;letter-spacing:0.3px;font-family:Arial,Helvetica,sans-serif;">${esc(text)}</a>
+        <a href="${esc(url)}" target="_blank" style="display:inline-block;padding:14px 36px;color:#ffffff;text-decoration:none;font-weight:${ctaWeight};font-size:15px;letter-spacing:0.3px;font-family:${ff};">${esc(text)}</a>
       </td>
     </tr>
   </table>`;
 }
 
-export function productGrid(products: ProductItem[], theme: ColorTheme): string {
+export function productGrid(products: ProductItem[], theme: ColorTheme, font: EmailFontDefinition, w: EmailWeights): string {
   if (!products.length) return "";
   const rows: string[] = [];
   for (let i = 0; i < products.length; i += 2) {
@@ -77,9 +90,9 @@ export function productGrid(products: ProductItem[], theme: ColorTheme): string 
       <td style="padding:0 8px 20px;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            ${productCell(left, theme)}
+            ${productCell(left, theme, font, w)}
             <td width="4%" style="padding:0;"></td>
-            ${right ? productCell(right, theme) : '<td width="48%"></td>'}
+            ${right ? productCell(right, theme, font, w) : '<td width="48%"></td>'}
           </tr>
         </table>
       </td>
@@ -94,15 +107,16 @@ export function productGrid(products: ProductItem[], theme: ColorTheme): string 
   </tr>`;
 }
 
-function productCell(p: ProductItem, theme: ColorTheme): string {
+function productCell(p: ProductItem, theme: ColorTheme, font: EmailFontDefinition, w: EmailWeights): string {
+  const ff = font.stackCss;
   const img = p.imageUrl?.trim()
     ? `<a href="${esc(p.productUrl)}" target="_blank"><img src="${esc(p.imageUrl)}" alt="${esc(p.name)}" width="100%" style="display:block;border:0;border-radius:6px;max-width:100%;" /></a>`
     : `<div style="width:100%;height:140px;background-color:${theme.bgLight};border-radius:6px;"></div>`;
-  return `<td width="48%" valign="top" style="vertical-align:top;">
+  return `<td width="48%" valign="top" style="vertical-align:top;font-family:${ff};">
     ${img}
-    <p style="margin:10px 0 4px;font-weight:700;color:${theme.text};font-size:14px;line-height:1.3;">${esc(p.name)}</p>
-    <p style="margin:0 0 8px;color:${theme.textMuted};font-size:13px;line-height:1.5;">${esc(p.description)}</p>
-    <a href="${esc(p.productUrl)}" target="_blank" style="color:${theme.accent};font-size:13px;font-weight:700;text-decoration:none;">Shop Now &rarr;</a>
+    <p style="margin:10px 0 4px;font-weight:${w.productName};color:${theme.text};font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
+    <p style="margin:0 0 8px;color:${theme.textMuted};font-size:13px;line-height:1.5;font-family:${ff};">${esc(p.description)}</p>
+    <a href="${esc(p.productUrl)}" target="_blank" style="color:${theme.accent};font-size:13px;font-weight:${w.productLink};text-decoration:none;font-family:${ff};">Shop Now &rarr;</a>
   </td>`;
 }
 

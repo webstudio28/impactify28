@@ -1,8 +1,15 @@
+import type { EmailFontDefinition } from "../fonts";
+import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { ProductLaunchData, RenderResult } from "./types";
 import { esc, emailWrapper, ctaButton, sectionDivider } from "./shared";
 
-export function renderProductLaunch(data: ProductLaunchData, theme: ColorTheme): RenderResult {
+export function renderProductLaunch(
+  data: ProductLaunchData,
+  theme: ColorTheme,
+  font: EmailFontDefinition,
+  w: EmailWeights
+): RenderResult {
   const heroRow = `<tr>
     <td style="padding:0;position:relative;">
       ${
@@ -11,17 +18,17 @@ export function renderProductLaunch(data: ProductLaunchData, theme: ColorTheme):
           : `<div style="width:100%;height:280px;background-color:${theme.bgLight};display:flex;align-items:center;justify-content:center;"></div>`
       }
       <div style="background-color:${theme.primary};padding:28px 40px;text-align:center;">
-        <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);">New Arrival</p>
-        <h1 style="margin:10px 0 0;color:#ffffff;font-size:28px;font-weight:900;line-height:1.2;">${esc(data.productName)}</h1>
+        <p style="margin:0;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);">New Arrival</p>
+        <h1 style="margin:10px 0 0;color:#ffffff;font-size:28px;font-weight:${w.hero};line-height:1.2;">${esc(data.productName)}</h1>
       </div>
     </td>
   </tr>`;
 
   const headlineRow = `<tr>
     <td style="padding:40px 40px 20px;text-align:center;">
-      <h2 style="margin:0;font-size:24px;font-weight:800;color:${theme.text};line-height:1.25;">${esc(data.launchHeadline)}</h2>
+      <h2 style="margin:0;font-size:24px;font-weight:${w.headline};color:${theme.text};line-height:1.25;">${esc(data.launchHeadline)}</h2>
       <div style="margin-top:24px;">
-        ${ctaButton(data.ctaText, data.ctaUrl, theme)}
+        ${ctaButton(data.ctaText, data.ctaUrl, theme, font, w.cta)}
       </div>
     </td>
   </tr>`;
@@ -41,14 +48,14 @@ export function renderProductLaunch(data: ProductLaunchData, theme: ColorTheme):
       ? `${sectionDivider()}
   <tr>
     <td style="padding:36px 40px;">
-      <p style="margin:0 0 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">Key Features</p>
+      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">Key Features</p>
       ${validFeatures
         .map(
           (f) => `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px;">
         <tr>
           <td width="28" valign="top" style="padding-right:12px;">
             <div style="width:24px;height:24px;background-color:${theme.accent};border-radius:50%;text-align:center;line-height:24px;">
-              <span style="color:#ffffff;font-size:13px;font-weight:700;">&#10003;</span>
+              <span style="color:#ffffff;font-size:13px;font-weight:${w.iconMark};">&#10003;</span>
             </div>
           </td>
           <td style="font-size:15px;color:${theme.text};line-height:1.5;">${esc(f)}</td>
@@ -66,7 +73,7 @@ export function renderProductLaunch(data: ProductLaunchData, theme: ColorTheme):
       ? `${sectionDivider()}
   <tr>
     <td style="padding:36px 40px;background-color:${theme.bgLight};">
-      <p style="margin:0 0 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">Why It Matters</p>
+      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">Why It Matters</p>
       ${validBenefits
         .map(
           (b) => `<p style="margin:0 0 12px;font-size:15px;color:${theme.text};line-height:1.6;padding-left:16px;border-left:3px solid ${theme.accent};">${esc(b)}</p>`
@@ -79,15 +86,15 @@ export function renderProductLaunch(data: ProductLaunchData, theme: ColorTheme):
   const finalCta = `${sectionDivider()}
   <tr>
     <td style="padding:40px;text-align:center;">
-      <h3 style="margin:0 0 20px;font-size:20px;font-weight:700;color:${theme.text};">Ready to experience it?</h3>
-      ${ctaButton(data.ctaText, data.ctaUrl, theme)}
+      <h3 style="margin:0 0 20px;font-size:20px;font-weight:${w.subhead};color:${theme.text};">Ready to experience it?</h3>
+      ${ctaButton(data.ctaText, data.ctaUrl, theme, font, w.cta)}
     </td>
   </tr>`;
 
   const content = [heroRow, headlineRow, storyRow, featuresRow, benefitsRow, finalCta].join("\n");
 
   return {
-    html: emailWrapper(content, theme),
+    html: emailWrapper(content, theme, font),
     subject: data.subjectLine,
   };
 }
