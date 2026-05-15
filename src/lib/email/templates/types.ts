@@ -15,6 +15,7 @@ export type PromotionalData = {
   templateType: "promotional";
   subjectLine: string;
   language: string;
+  heroImageUrl?: string;
   heroHeadline: string;
   supportingLine: string;
   ctaText: string;
@@ -41,6 +42,7 @@ export type SeasonalData = {
   templateType: "seasonal";
   subjectLine: string;
   language: string;
+  heroImageUrl?: string;
   seasonalHeadline: string;
   urgencyMessage: string;
   ctaText: string;
@@ -54,6 +56,7 @@ export type DiscountCouponData = {
   templateType: "discount_coupon";
   subjectLine: string;
   language: string;
+  heroImageUrl?: string;
   discountAmount: string;
   couponCode: string;
   heroHeadline: string;

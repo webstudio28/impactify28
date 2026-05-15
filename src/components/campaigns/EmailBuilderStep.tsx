@@ -42,6 +42,7 @@ type FormFields = {
   discountAmount: string;
   couponCode: string;
   redemptionSteps: string[];
+  heroImageUrl: string;
 };
 
 function defaultFields(): FormFields {
@@ -65,7 +66,13 @@ function defaultFields(): FormFields {
     discountAmount: "",
     couponCode: "",
     redemptionSteps: ["", "", ""],
+    heroImageUrl: "",
   };
+}
+
+function heroImageFromData(data: EmailTemplateData): string {
+  if (data.templateType === "product_launch") return "";
+  return data.heroImageUrl?.trim() ?? "";
 }
 
 function fieldsFromData(data: EmailTemplateData): FormFields {
@@ -76,13 +83,36 @@ function fieldsFromData(data: EmailTemplateData): FormFields {
   base.ctaUrl = data.ctaUrl;
   switch (data.templateType) {
     case "promotional":
-      return { ...base, heroHeadline: data.heroHeadline, supportingLine: data.supportingLine, offerDescription: data.offerDescription, products: data.products };
+      return {
+        ...base,
+        heroImageUrl: heroImageFromData(data),
+        heroHeadline: data.heroHeadline,
+        supportingLine: data.supportingLine,
+        offerDescription: data.offerDescription,
+        products: data.products,
+      };
     case "product_launch":
       return { ...base, productName: data.productName, productImageUrl: data.productImageUrl, launchHeadline: data.launchHeadline, story: data.story, features: data.features.length ? data.features : ["", "", ""], benefits: data.benefits.length ? data.benefits : ["", ""] };
     case "seasonal":
-      return { ...base, heroHeadline: data.seasonalHeadline, urgencyMessage: data.urgencyMessage, countdownText: data.countdownText, offerDescription: data.offerDescription, products: data.products };
+      return {
+        ...base,
+        heroImageUrl: heroImageFromData(data),
+        heroHeadline: data.seasonalHeadline,
+        urgencyMessage: data.urgencyMessage,
+        countdownText: data.countdownText,
+        offerDescription: data.offerDescription,
+        products: data.products,
+      };
     case "discount_coupon":
-      return { ...base, discountAmount: data.discountAmount, couponCode: data.couponCode, heroHeadline: data.heroHeadline, redemptionSteps: data.redemptionSteps.length ? data.redemptionSteps : ["", "", ""], products: data.products };
+      return {
+        ...base,
+        heroImageUrl: heroImageFromData(data),
+        discountAmount: data.discountAmount,
+        couponCode: data.couponCode,
+        heroHeadline: data.heroHeadline,
+        redemptionSteps: data.redemptionSteps.length ? data.redemptionSteps : ["", "", ""],
+        products: data.products,
+      };
   }
 }
 
@@ -90,13 +120,39 @@ function buildTemplateData(type: EmailTemplateType, f: FormFields): EmailTemplat
   const base = { subjectLine: f.subjectLine, language: f.language, ctaText: f.ctaText, ctaUrl: f.ctaUrl };
   switch (type) {
     case "promotional":
-      return { templateType: "promotional", ...base, heroHeadline: f.heroHeadline, supportingLine: f.supportingLine, offerDescription: f.offerDescription, products: f.products };
+      return {
+        templateType: "promotional",
+        ...base,
+        ...(f.heroImageUrl.trim() ? { heroImageUrl: f.heroImageUrl.trim() } : {}),
+        heroHeadline: f.heroHeadline,
+        supportingLine: f.supportingLine,
+        offerDescription: f.offerDescription,
+        products: f.products,
+      };
     case "product_launch":
       return { templateType: "product_launch", ...base, productName: f.productName, productImageUrl: f.productImageUrl, launchHeadline: f.launchHeadline, story: f.story, features: f.features.filter(Boolean), benefits: f.benefits.filter(Boolean) };
     case "seasonal":
-      return { templateType: "seasonal", ...base, seasonalHeadline: f.heroHeadline, urgencyMessage: f.urgencyMessage, countdownText: f.countdownText, offerDescription: f.offerDescription, products: f.products };
+      return {
+        templateType: "seasonal",
+        ...base,
+        ...(f.heroImageUrl.trim() ? { heroImageUrl: f.heroImageUrl.trim() } : {}),
+        seasonalHeadline: f.heroHeadline,
+        urgencyMessage: f.urgencyMessage,
+        countdownText: f.countdownText,
+        offerDescription: f.offerDescription,
+        products: f.products,
+      };
     case "discount_coupon":
-      return { templateType: "discount_coupon", ...base, discountAmount: f.discountAmount, couponCode: f.couponCode, heroHeadline: f.heroHeadline, redemptionSteps: f.redemptionSteps.filter(Boolean), products: f.products };
+      return {
+        templateType: "discount_coupon",
+        ...base,
+        ...(f.heroImageUrl.trim() ? { heroImageUrl: f.heroImageUrl.trim() } : {}),
+        discountAmount: f.discountAmount,
+        couponCode: f.couponCode,
+        heroHeadline: f.heroHeadline,
+        redemptionSteps: f.redemptionSteps.filter(Boolean),
+        products: f.products,
+      };
   }
 }
 
@@ -159,7 +215,10 @@ export function EmailBuilderStep({
   const [refreshTick, setRefreshTick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [heroImageUploading, setHeroImageUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hasHeroBanner = templateType !== "product_launch";
 
   function patch(partial: Partial<FormFields>) {
     setFields((prev) => ({ ...prev, ...partial }));
@@ -227,6 +286,22 @@ export function EmailBuilderStep({
       setError(e instanceof Error ? e.message : tReady("logoFailed"));
     } finally {
       setLogoUploading(false);
+    }
+  }
+
+  async function uploadHeroImage(file: File) {
+    setHeroImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/campaigns/${campaignId}/hero-image`, { method: "POST", body: fd });
+      const j = (await res.json()) as { error?: string; hero_image_url?: string };
+      if (!res.ok) throw new Error(j.error ?? t("heroImageFailed"));
+      patch({ heroImageUrl: j.hero_image_url ?? "" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("heroImageFailed"));
+    } finally {
+      setHeroImageUploading(false);
     }
   }
 
@@ -359,6 +434,51 @@ export function EmailBuilderStep({
     </div>
   );
 
+  const heroImageSection = (
+    <div className="space-y-2 rounded-lg border border-zinc-100 bg-zinc-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{t("heroImage")}</p>
+      <p className="text-xs text-ink-muted">{t("heroImageHint")}</p>
+      {fields.heroImageUrl ? (
+        <div className="space-y-2">
+          <img
+            src={fields.heroImageUrl}
+            alt=""
+            className="h-24 w-full rounded-md border border-zinc-200 object-cover"
+          />
+          <p className="text-xs text-emerald-700">{t("heroImageOnFile")}</p>
+        </div>
+      ) : (
+        <p className="text-xs text-ink-muted">{t("heroImageEmpty")}</p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <label className="inline-flex cursor-pointer rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium hover:bg-zinc-100">
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            disabled={heroImageUploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void uploadHeroImage(f);
+            }}
+          />
+          {heroImageUploading ? t("heroImageUploading") : t("uploadHeroImage")}
+        </label>
+        {fields.heroImageUrl ? (
+          <button
+            type="button"
+            onClick={() => patch({ heroImageUrl: "" })}
+            disabled={heroImageUploading}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-ink-muted hover:bg-zinc-100 disabled:opacity-40"
+          >
+            {t("removeHeroImage")}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
   const logoSection = (
     <div className="space-y-2 rounded-lg border border-zinc-100 bg-zinc-50 p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{tReady("logoTitle")}</p>
@@ -480,6 +600,8 @@ export function EmailBuilderStep({
             <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
           </div>
         )}
+
+        {hasHeroBanner ? heroImageSection : null}
 
         {logoSection}
 

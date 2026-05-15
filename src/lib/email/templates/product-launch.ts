@@ -1,4 +1,5 @@
 import type { EmailFontDefinition } from "../fonts";
+import { getEmailStrings } from "../strings";
 import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { ProductLaunchData, RenderResult } from "./types";
@@ -10,6 +11,7 @@ export function renderProductLaunch(
   font: EmailFontDefinition,
   w: EmailWeights
 ): RenderResult {
+  const s = getEmailStrings(data.language);
   const heroRow = `<tr>
     <td style="padding:0;position:relative;">
       ${
@@ -18,7 +20,7 @@ export function renderProductLaunch(
           : `<div style="width:100%;height:280px;background-color:${theme.bgLight};display:flex;align-items:center;justify-content:center;"></div>`
       }
       <div style="background-color:${theme.primary};padding:28px 40px;text-align:center;">
-        <p style="margin:0;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);">New Arrival</p>
+        <p style="margin:0;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);">${esc(s.newArrival)}</p>
         <h1 style="margin:10px 0 0;color:#ffffff;font-size:28px;font-weight:${w.hero};line-height:1.2;">${esc(data.productName)}</h1>
       </div>
     </td>
@@ -48,7 +50,7 @@ export function renderProductLaunch(
       ? `${sectionDivider()}
   <tr>
     <td style="padding:36px 40px;">
-      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">Key Features</p>
+      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">${esc(s.keyFeatures)}</p>
       ${validFeatures
         .map(
           (f) => `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px;">
@@ -73,7 +75,7 @@ export function renderProductLaunch(
       ? `${sectionDivider()}
   <tr>
     <td style="padding:36px 40px;background-color:${theme.bgLight};">
-      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">Why It Matters</p>
+      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">${esc(s.whyItMatters)}</p>
       ${validBenefits
         .map(
           (b) => `<p style="margin:0 0 12px;font-size:15px;color:${theme.text};line-height:1.6;padding-left:16px;border-left:3px solid ${theme.accent};">${esc(b)}</p>`
@@ -86,7 +88,7 @@ export function renderProductLaunch(
   const finalCta = `${sectionDivider()}
   <tr>
     <td style="padding:40px;text-align:center;">
-      <h3 style="margin:0 0 20px;font-size:20px;font-weight:${w.subhead};color:${theme.text};">Ready to experience it?</h3>
+      <h3 style="margin:0 0 20px;font-size:20px;font-weight:${w.subhead};color:${theme.text};">${esc(s.readyToExperience)}</h3>
       ${ctaButton(data.ctaText, data.ctaUrl, theme, font, w.cta)}
     </td>
   </tr>`;
@@ -94,7 +96,7 @@ export function renderProductLaunch(
   const content = [heroRow, headlineRow, storyRow, featuresRow, benefitsRow, finalCta].join("\n");
 
   return {
-    html: emailWrapper(content, theme, font),
+    html: emailWrapper(content, theme, font, s, data.language),
     subject: data.subjectLine,
   };
 }

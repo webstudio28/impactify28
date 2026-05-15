@@ -1,8 +1,9 @@
 import type { EmailFontDefinition } from "../fonts";
+import { getEmailStrings } from "../strings";
 import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { SeasonalData, RenderResult } from "./types";
-import { esc, emailWrapper, ctaButton, productGrid, sectionDivider } from "./shared";
+import { esc, emailWrapper, ctaButton, productGrid, sectionDivider, heroBannerRow } from "./shared";
 
 export function renderSeasonal(
   data: SeasonalData,
@@ -10,9 +11,8 @@ export function renderSeasonal(
   font: EmailFontDefinition,
   w: EmailWeights
 ): RenderResult {
-  const heroRow = `<tr>
-    <td style="background-color:${theme.primary};padding:56px 40px;text-align:center;">
-      <h1 style="margin:0;color:${theme.heroText};font-size:38px;font-weight:${w.hero};line-height:1.15;letter-spacing:-0.5px;">${esc(data.seasonalHeadline)}</h1>
+  const s = getEmailStrings(data.language);
+  const heroInner = `<h1 style="margin:0;color:${theme.heroText};font-size:38px;font-weight:${w.hero};line-height:1.15;letter-spacing:-0.5px;">${esc(data.seasonalHeadline)}</h1>
       ${
         data.urgencyMessage
           ? `<p style="margin:16px 0 0;color:rgba(255,255,255,0.88);font-size:18px;font-weight:${w.heroSub};line-height:1.4;">${esc(data.urgencyMessage)}</p>`
@@ -20,9 +20,9 @@ export function renderSeasonal(
       }
       <div style="margin-top:32px;">
         ${ctaButton(data.ctaText, data.ctaUrl, theme, font, w.cta)}
-      </div>
-    </td>
-  </tr>`;
+      </div>`;
+
+  const heroRow = heroBannerRow(heroInner, theme, data.heroImageUrl);
 
   const urgencyBlockRow = data.countdownText
     ? `<tr>
@@ -36,14 +36,14 @@ export function renderSeasonal(
     ? `${sectionDivider()}
   <tr>
     <td style="padding:36px 40px;text-align:center;background-color:${theme.bgLight};">
-      <p style="margin:0;font-size:13px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">This Season&rsquo;s Deal</p>
+      <p style="margin:0;font-size:13px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};">${esc(s.thisSeasonDeal)}</p>
       <p style="margin:12px 0 0;font-size:17px;color:${theme.text};line-height:1.65;">${esc(data.offerDescription)}</p>
     </td>
   </tr>`
     : "";
 
   const hasProducts = data.products.length > 0;
-  const productsHtml = hasProducts ? productGrid(data.products, theme, font, w) : "";
+  const productsHtml = hasProducts ? productGrid(data.products, theme, font, w, s) : "";
 
   const secondaryCta = hasProducts
     ? `<tr>
@@ -56,7 +56,7 @@ export function renderSeasonal(
   const content = [heroRow, urgencyBlockRow, offerRow, productsHtml, secondaryCta].join("\n");
 
   return {
-    html: emailWrapper(content, theme, font),
+    html: emailWrapper(content, theme, font, s, data.language),
     subject: data.subjectLine,
   };
 }
