@@ -163,7 +163,12 @@ function SmsMessageStep({ draft, onChange, campaignId, t }: { draft: StepDraft; 
   );
 }
 
-export function CampaignWizard() {
+type CampaignWizardProps = {
+  /** When true (EMAIL_PREFILL env), new email builder sessions start with sample content. */
+  emailPrefillEnabled?: boolean;
+};
+
+export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardProps) {
   const t = useTranslations("wizard");
   const tEmail = useTranslations("emailWizard");
   const router = useRouter();
@@ -540,6 +545,7 @@ export function CampaignWizard() {
           initialEmailFont={emailInitialFont}
           initialEmailEmphasis={emailInitialEmphasis}
           initialEmailLayout={emailInitialLayout}
+          emailPrefillEnabled={emailPrefillEnabled}
           onBack={() => { setError(null); setStep(4); }}
           onSubmitted={() => { router.push("/dashboard/campaigns"); router.refresh(); }}
         />

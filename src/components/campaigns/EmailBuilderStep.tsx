@@ -18,6 +18,7 @@ import {
   type EmailLayoutStyle,
 } from "@/lib/email/layout-styles";
 import type { EmailTemplateData, EmailTemplateType, ProductItem } from "@/lib/email/templates/types";
+import { getEmailPrefillFields, PREFILL_SENDER } from "@/lib/email/email-prefill";
 import { ProductsEditor, ListEditor } from "./EmailFormHelpers";
 
 const TEMPLATE_CONFIGS: Record<EmailTemplateType, { maxProducts: number; hasProducts: boolean }> = {
@@ -267,6 +268,7 @@ type Props = {
   initialEmailFont?: string | null;
   initialEmailEmphasis?: string | null;
   initialEmailLayout?: string | null;
+  emailPrefillEnabled?: boolean;
   onBack: () => void;
   onSubmitted: () => void;
 };
@@ -279,17 +281,24 @@ export function EmailBuilderStep({
   initialEmailFont,
   initialEmailEmphasis,
   initialEmailLayout,
+  emailPrefillEnabled = false,
   onBack,
   onSubmitted,
 }: Props) {
   const t = useTranslations("emailWizard");
   const tReady = useTranslations("emailReady");
 
-  const [fields, setFields] = useState<FormFields>(() =>
-    initialData ? fieldsFromData(initialData) : defaultFields()
+  const [fields, setFields] = useState<FormFields>(() => {
+    if (initialData) return fieldsFromData(initialData);
+    if (emailPrefillEnabled) return getEmailPrefillFields(templateType);
+    return defaultFields();
+  });
+  const [senderEmail, setSenderEmail] = useState(() =>
+    emailPrefillEnabled && !initialData ? PREFILL_SENDER.email : ""
   );
-  const [senderEmail, setSenderEmail] = useState("");
-  const [senderDisplayName, setSenderDisplayName] = useState("");
+  const [senderDisplayName, setSenderDisplayName] = useState(() =>
+    emailPrefillEnabled && !initialData ? PREFILL_SENDER.displayName : ""
+  );
   const [colorTheme, setColorTheme] = useState<ThemeKey>(() =>
     initialColorTheme && initialColorTheme in COLOR_THEMES
       ? (initialColorTheme as ThemeKey)

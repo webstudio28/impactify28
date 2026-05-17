@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { CampaignWizard } from "@/components/campaigns/CampaignWizard";
+import { isEmailPrefillEnabled } from "@/lib/email/prefill-env";
 
 export default async function NewCampaignPage({
   params,
@@ -47,7 +48,7 @@ export default async function NewCampaignPage({
 
   return (
     <Suspense fallback={<div className="mx-auto max-w-xl text-sm text-ink-muted">{t("loadingWizard")}</div>}>
-      <CampaignWizard />
+      <CampaignWizard emailPrefillEnabled={isEmailPrefillEnabled()} />
     </Suspense>
   );
 }
