@@ -21,7 +21,7 @@ export async function GET(req: Request, ctx: Ctx) {
 
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
-    .select("id, user_id, email_html, email_template_data, email_color_theme, email_font_family, email_emphasis_preset, channel")
+    .select("id, user_id, email_html, email_template_data, email_color_theme, email_font_family, email_emphasis_preset, email_layout_style, channel")
     .eq("id", id)
     .single();
 
@@ -50,7 +50,11 @@ export async function GET(req: Request, ctx: Ctx) {
       typeof campaign.email_emphasis_preset === "string" && campaign.email_emphasis_preset.trim()
         ? campaign.email_emphasis_preset.trim()
         : undefined;
-    const { html } = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey);
+    const layoutKey =
+      typeof campaign.email_layout_style === "string" && campaign.email_layout_style.trim()
+        ? campaign.email_layout_style.trim()
+        : undefined;
+    const { html } = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey, layoutKey);
     htmlRaw = html;
   } else {
     htmlRaw = typeof campaign.email_html === "string" ? campaign.email_html : "";

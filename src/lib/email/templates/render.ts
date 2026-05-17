@@ -1,6 +1,7 @@
 import { getTheme } from "../themes";
 import { getEmailFont } from "../fonts";
 import { getEmphasisPreset, getEmailWeights } from "../typography-emphasis";
+import { getLayoutStyle } from "../layout-styles";
 import type { EmailTemplateData, RenderResult } from "./types";
 import { renderPromotional } from "./promotional";
 import { renderProductLaunch } from "./product-launch";
@@ -11,20 +12,22 @@ export function renderEmailTemplate(
   data: EmailTemplateData,
   themeKey: string | null | undefined,
   fontKey?: string | null | undefined,
-  emphasisKey?: string | null | undefined
+  emphasisKey?: string | null | undefined,
+  layoutKey?: string | null | undefined
 ): RenderResult {
   const theme = getTheme(themeKey);
   const font = getEmailFont(fontKey);
   const weights = getEmailWeights(getEmphasisPreset(emphasisKey));
+  const layout = getLayoutStyle(layoutKey);
   switch (data.templateType) {
     case "promotional":
-      return renderPromotional(data, theme, font, weights);
+      return renderPromotional(data, theme, font, weights, layout);
     case "product_launch":
-      return renderProductLaunch(data, theme, font, weights);
+      return renderProductLaunch(data, theme, font, weights, layout);
     case "seasonal":
-      return renderSeasonal(data, theme, font, weights);
+      return renderSeasonal(data, theme, font, weights, layout);
     case "discount_coupon":
-      return renderDiscountCoupon(data, theme, font, weights);
+      return renderDiscountCoupon(data, theme, font, weights, layout);
   }
 }
 

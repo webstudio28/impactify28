@@ -17,7 +17,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
-    .select("id, status, channel, email_template_data, email_template_type, email_color_theme, email_font_family, email_emphasis_preset")
+    .select("id, status, channel, email_template_data, email_template_type, email_color_theme, email_font_family, email_emphasis_preset, email_layout_style")
     .eq("id", id)
     .single();
 
@@ -36,6 +36,10 @@ export async function POST(req: Request, ctx: Ctx) {
     typeof campaign.email_emphasis_preset === "string" && campaign.email_emphasis_preset.trim()
       ? campaign.email_emphasis_preset.trim()
       : DEFAULT_EMAIL_EMPHASIS_PRESET;
+  let layoutKey: string =
+    typeof campaign.email_layout_style === "string" && campaign.email_layout_style.trim()
+      ? campaign.email_layout_style.trim()
+      : "standard";
 
   try {
     const body = (await req.json()) as {
@@ -43,6 +47,7 @@ export async function POST(req: Request, ctx: Ctx) {
       colorTheme?: string;
       fontFamily?: string;
       emphasisPreset?: string;
+      layoutStyle?: string;
     };
     if (body.templateData) rawTemplateData = body.templateData;
     if (typeof body.colorTheme === "string" && body.colorTheme.trim()) {
@@ -54,6 +59,9 @@ export async function POST(req: Request, ctx: Ctx) {
     if (typeof body.emphasisPreset === "string" && body.emphasisPreset.trim()) {
       const e = body.emphasisPreset.trim();
       emphasisKey = getEmphasisPreset(e);
+    }
+    if (typeof body.layoutStyle === "string" && body.layoutStyle.trim()) {
+      layoutKey = body.layoutStyle.trim();
     }
   } catch {
     /* use stored */
@@ -72,7 +80,7 @@ export async function POST(req: Request, ctx: Ctx) {
   }
 
   try {
-    const { html, subject } = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey);
+    const { html, subject } = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey, layoutKey);
 
     const { error: upErr } = await supabase
       .from("campaigns")
@@ -84,6 +92,7 @@ export async function POST(req: Request, ctx: Ctx) {
         email_color_theme: colorTheme,
         email_font_family: fontKey,
         email_emphasis_preset: emphasisKey,
+        email_layout_style: layoutKey,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

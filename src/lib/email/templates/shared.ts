@@ -18,7 +18,8 @@ export function emailWrapper(
   theme: ColorTheme,
   font: EmailFontDefinition,
   strings: EmailStrings,
-  language: string
+  language: string,
+  footerStyle: "light" | "dark" = "light"
 ): string {
   const ff = font.stackCss;
   const lang = emailHtmlLang(language);
@@ -40,7 +41,7 @@ export function emailWrapper(
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:${ff};">
           {{COMPANY_LOGO}}
           ${content}
-          ${emailFooter(theme, ff, strings)}
+          ${emailFooter(theme, ff, strings, footerStyle)}
         </table>
       </td>
     </tr>
@@ -49,7 +50,23 @@ export function emailWrapper(
 </html>`;
 }
 
-function emailFooter(theme: ColorTheme, fontFamily: string, strings: EmailStrings): string {
+function emailFooter(
+  theme: ColorTheme,
+  fontFamily: string,
+  strings: EmailStrings,
+  footerStyle: "light" | "dark"
+): string {
+  if (footerStyle === "dark") {
+    return `<tr>
+    <td style="background-color:#0d0d0d;padding:28px 40px;text-align:center;border-top:1px solid rgba(255,255,255,0.08);font-family:${fontFamily};">
+      <p style="margin:0;font-size:12px;font-family:${fontFamily};">
+        <a href="#" style="color:rgba(255,255,255,0.65);text-decoration:underline;">${esc(strings.unsubscribe)}</a>
+        &nbsp;&middot;&nbsp;
+        <a href="#" style="color:rgba(255,255,255,0.65);text-decoration:underline;">${esc(strings.viewInBrowser)}</a>
+      </p>
+    </td>
+  </tr>`;
+  }
   return `<tr>
     <td style="background-color:${theme.bgLight};padding:28px 40px;text-align:center;border-top:1px solid rgba(0,0,0,0.06);font-family:${fontFamily};">
       <p style="margin:0;font-size:12px;color:${theme.textMuted};font-family:${fontFamily};">
@@ -69,30 +86,11 @@ export function logoRow(): string {
   </tr>`;
 }
 
-/** Hero banner: solid theme color, or background image with dark overlay for white text. */
-export function heroBannerRow(innerHtml: string, theme: ColorTheme, heroImageUrl?: string | null): string {
-  return `<tr>\n    ${heroBannerCell(innerHtml, theme, heroImageUrl)}\n  </tr>`;
+export function sectionDivider(): string {
+  return `<tr><td style="height:1px;background-color:rgba(0,0,0,0.06);"></td></tr>`;
 }
 
-export function heroBannerCell(innerHtml: string, theme: ColorTheme, heroImageUrl?: string | null): string {
-  const padding = "56px 40px";
-  const url = heroImageUrl?.trim();
-  if (!url) {
-    return `<td style="background-color:${theme.primary};padding:${padding};text-align:center;">
-      ${innerHtml}
-    </td>`;
-  }
-  const safeUrl = esc(url);
-  return `<td background="${safeUrl}" bgcolor="${theme.primary}" style="background-color:${theme.primary};background-image:url('${safeUrl}');background-size:cover;background-position:center center;background-repeat:no-repeat;padding:0;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="width:100%;">
-      <tr>
-        <td style="background-color:rgba(0,0,0,0.55);padding:${padding};text-align:center;">
-          ${innerHtml}
-        </td>
-      </tr>
-    </table>
-  </td>`;
-}
+// ── Kept as utilities for product-launch template ─────────────────────────────
 
 export function ctaButton(
   text: string,
@@ -119,6 +117,7 @@ export function productGrid(
   strings: EmailStrings
 ): string {
   if (!products.length) return "";
+  const ff = font.stackCss;
   const rows: string[] = [];
   for (let i = 0; i < products.length; i += 2) {
     const left = products[i]!;
@@ -127,9 +126,9 @@ export function productGrid(
       <td style="padding:0 8px 20px;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            ${productCell(left, theme, font, w, strings)}
+            ${productCell(left, theme, font, w, strings, ff)}
             <td width="4%" style="padding:0;"></td>
-            ${right ? productCell(right, theme, font, w, strings) : '<td width="48%"></td>'}
+            ${right ? productCell(right, theme, font, w, strings, ff) : '<td width="48%"></td>'}
           </tr>
         </table>
       </td>
@@ -149,9 +148,9 @@ function productCell(
   theme: ColorTheme,
   font: EmailFontDefinition,
   w: EmailWeights,
-  strings: EmailStrings
+  strings: EmailStrings,
+  ff: string
 ): string {
-  const ff = font.stackCss;
   const img = p.imageUrl?.trim()
     ? `<a href="${esc(p.productUrl)}" target="_blank"><img src="${esc(p.imageUrl)}" alt="${esc(p.name)}" width="100%" style="display:block;border:0;border-radius:6px;max-width:100%;" /></a>`
     : `<div style="width:100%;height:140px;background-color:${theme.bgLight};border-radius:6px;"></div>`;
@@ -161,8 +160,4 @@ function productCell(
     <p style="margin:0 0 8px;color:${theme.textMuted};font-size:13px;line-height:1.5;font-family:${ff};">${esc(p.description)}</p>
     <a href="${esc(p.productUrl)}" target="_blank" style="color:${theme.accent};font-size:13px;font-weight:${w.productLink};text-decoration:none;font-family:${ff};">${esc(strings.shopNow)}</a>
   </td>`;
-}
-
-export function sectionDivider(): string {
-  return `<tr><td style="height:1px;background-color:rgba(0,0,0,0.06);"></td></tr>`;
 }

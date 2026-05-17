@@ -12,6 +12,11 @@ import {
   EMAIL_EMPHASIS_PRESETS,
   type EmailEmphasisPreset,
 } from "@/lib/email/typography-emphasis";
+import {
+  EMAIL_LAYOUT_STYLES,
+  DEFAULT_EMAIL_LAYOUT_STYLE,
+  type EmailLayoutStyle,
+} from "@/lib/email/layout-styles";
 import type { EmailTemplateData, EmailTemplateType, ProductItem } from "@/lib/email/templates/types";
 import { ProductsEditor, ListEditor } from "./EmailFormHelpers";
 
@@ -156,6 +161,95 @@ function buildTemplateData(type: EmailTemplateType, f: FormFields): EmailTemplat
   }
 }
 
+function LayoutPreviewIcon({ layoutKey, selected }: { layoutKey: EmailLayoutStyle; selected: boolean }) {
+  const accent = selected ? "#6366f1" : "#94a3b8";
+  const line = selected ? "#c7d2fe" : "#e2e8f0";
+  const dark = "#0d0d0d";
+
+  if (layoutKey === "standard") {
+    return (
+      <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
+        <rect x="0" y="0" width="40" height="20" rx="3" fill={accent} />
+        <rect x="8" y="6" width="24" height="4" rx="1.5" fill="white" opacity="0.9" />
+        <rect x="12" y="12" width="16" height="3" rx="1" fill="white" opacity="0.6" />
+        <rect x="4" y="24" width="32" height="3" rx="1" fill={line} />
+        <rect x="6" y="30" width="13" height="12" rx="1.5" fill={line} />
+        <rect x="21" y="30" width="13" height="12" rx="1.5" fill={line} />
+        <rect x="4" y="45" width="32" height="2.5" rx="1" fill={line} />
+        <rect x="8" y="49" width="24" height="2" rx="1" fill={line} opacity="0.5" />
+      </svg>
+    );
+  }
+
+  if (layoutKey === "editorial") {
+    return (
+      <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
+        <rect x="0" y="0" width="40" height="20" rx="3" fill={accent} />
+        <rect x="4" y="6" width="18" height="4" rx="1.5" fill="white" opacity="0.9" />
+        <rect x="4" y="12" width="12" height="2.5" rx="1" fill="white" opacity="0.6" />
+        <rect x="0" y="24" width="4" height="22" rx="0" fill={accent} />
+        <rect x="7" y="27" width="9" height="7" rx="1" fill={line} />
+        <rect x="18" y="27" width="18" height="2.5" rx="1" fill={line} />
+        <rect x="18" y="31" width="14" height="2" rx="1" fill={line} opacity="0.5" />
+        <rect x="7" y="38" width="9" height="7" rx="1" fill={line} />
+        <rect x="18" y="38" width="18" height="2.5" rx="1" fill={line} />
+        <rect x="18" y="42" width="14" height="2" rx="1" fill={line} opacity="0.5" />
+        <rect x="4" y="49" width="32" height="2" rx="1" fill={line} opacity="0.4" />
+      </svg>
+    );
+  }
+
+  if (layoutKey === "minimal") {
+    return (
+      <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
+        <rect x="0" y="0" width="40" height="4" rx="2" fill={accent} />
+        <rect x="8" y="8" width="24" height="5" rx="1.5" fill="#1e293b" opacity="0.8" />
+        <rect x="12" y="15" width="16" height="2.5" rx="1" fill="#94a3b8" />
+        <rect x="13" y="20" width="14" height="5" rx="2" fill="none" stroke={accent} strokeWidth="1" />
+        <rect x="0" y="29" width="40" height="1" fill={line} />
+        <rect x="6" y="33" width="13" height="11" rx="1.5" fill={line} />
+        <rect x="21" y="33" width="13" height="11" rx="1.5" fill={line} />
+        <rect x="0" y="48" width="40" height="1" fill={line} />
+        <rect x="8" y="51" width="24" height="2" rx="1" fill={line} opacity="0.5" />
+      </svg>
+    );
+  }
+
+  if (layoutKey === "bold") {
+    return (
+      <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
+        <rect x="0" y="0" width="40" height="26" rx="3" fill={accent} />
+        <rect x="6" y="5" width="28" height="7" rx="2" fill="white" opacity="0.9" />
+        <rect x="10" y="14" width="20" height="3" rx="1" fill="white" opacity="0.6" />
+        <rect x="0" y="26" width="40" height="5" rx="0" fill={selected ? "#818cf8" : "#94a3b8"} />
+        <rect x="4" y="35" width="32" height="2.5" rx="1" fill={line} />
+        <rect x="6" y="40" width="13" height="8" rx="1" fill={line} />
+        <rect x="21" y="40" width="13" height="8" rx="1" fill={line} />
+        <rect x="4" y="51" width="32" height="2" rx="1" fill={line} opacity="0.4" />
+      </svg>
+    );
+  }
+
+  // spotlight
+  return (
+    <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
+      <rect x="0" y="0" width="40" height="24" rx="3" fill={dark} />
+      <rect x="8" y="6" width="24" height="5" rx="1.5" fill="white" opacity="0.9" />
+      <rect x="12" y="13" width="16" height="3" rx="1" fill="white" opacity="0.55" />
+      <rect x="0" y="24" width="40" height="3" rx="0" fill={accent} />
+      <rect x="4" y="30" width="32" height="2.5" rx="1" fill={line} />
+      <rect x="6" y="35" width="13" height="11" rx="1.5" fill={line} />
+      <rect x="21" y="35" width="13" height="11" rx="1.5" fill={line} />
+      <rect x="0" y="49" width="40" height="5" rx="3" fill={dark} />
+    </svg>
+  );
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState<T>(value);
   useEffect(() => {
@@ -172,6 +266,7 @@ type Props = {
   initialColorTheme?: string | null;
   initialEmailFont?: string | null;
   initialEmailEmphasis?: string | null;
+  initialEmailLayout?: string | null;
   onBack: () => void;
   onSubmitted: () => void;
 };
@@ -183,6 +278,7 @@ export function EmailBuilderStep({
   initialColorTheme,
   initialEmailFont,
   initialEmailEmphasis,
+  initialEmailLayout,
   onBack,
   onSubmitted,
 }: Props) {
@@ -208,6 +304,11 @@ export function EmailBuilderStep({
     const e = initialEmailEmphasis?.trim();
     if (e === "balanced" || e === "bold") return e;
     return DEFAULT_EMAIL_EMPHASIS_PRESET;
+  });
+  const [emailLayout, setEmailLayout] = useState<EmailLayoutStyle>(() => {
+    const l = initialEmailLayout?.trim() as EmailLayoutStyle | undefined;
+    if (l && EMAIL_LAYOUT_STYLES.includes(l)) return l;
+    return DEFAULT_EMAIL_LAYOUT_STYLE;
   });
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
@@ -259,7 +360,7 @@ export function EmailBuilderStep({
   // Re-render preview whenever data, theme, logo, viewport, or refresh tick changes
   useEffect(() => {
     try {
-      const { html } = renderEmailTemplate(debouncedData, colorTheme, emailFont, emailEmphasis);
+      const { html } = renderEmailTemplate(debouncedData, colorTheme, emailFont, emailEmphasis, emailLayout);
       const withLogo = injectLogoIntoHtml(html, logoUrl);
       const fd = getEmailFont(emailFont);
       setPreviewHtml(
@@ -271,7 +372,7 @@ export function EmailBuilderStep({
     } catch {
       // keep previous preview if render fails during partial input
     }
-  }, [debouncedData, colorTheme, emailFont, emailEmphasis, logoUrl, viewport, refreshTick]);
+  }, [debouncedData, colorTheme, emailFont, emailEmphasis, emailLayout, logoUrl, viewport, refreshTick]);
 
   async function uploadLogo(file: File) {
     setLogoUploading(true);
@@ -311,6 +412,15 @@ export function EmailBuilderStep({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email_emphasis_preset: key }),
+    });
+  }
+
+  async function selectEmailLayout(key: EmailLayoutStyle) {
+    setEmailLayout(key);
+    void fetch(`/api/campaigns/${campaignId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email_layout_style: key }),
     });
   }
 
@@ -370,7 +480,7 @@ export function EmailBuilderStep({
       const genRes = await fetch(`/api/campaigns/${campaignId}/generate-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateData, colorTheme, fontFamily: emailFont, emphasisPreset: emailEmphasis }),
+        body: JSON.stringify({ templateData, colorTheme, fontFamily: emailFont, emphasisPreset: emailEmphasis, layoutStyle: emailLayout }),
       });
       const gj = (await genRes.json()) as { error?: string };
       if (!genRes.ok) throw new Error(gj.error ?? t("generateFailed"));
@@ -768,6 +878,32 @@ export function EmailBuilderStep({
                     }`}
                   >
                     {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Layout picker */}
+          <div className="border-t border-zinc-100 pt-4">
+            <p className="text-xs font-semibold text-ink">{tReady("layoutTitle")}</p>
+            <p className="mt-0.5 text-xs text-ink-muted">{tReady("layoutHint")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {EMAIL_LAYOUT_STYLES.map((key) => {
+                const selected = emailLayout === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => void selectEmailLayout(key)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-2 transition ${
+                      selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
+                    }`}
+                  >
+                    <LayoutPreviewIcon layoutKey={key} selected={selected} />
+                    <span className={`text-[9px] leading-tight font-medium ${selected ? "text-ink" : "text-ink-muted"}`}>
+                      {tReady(`layout_${key}` as "layout_standard")}
+                    </span>
                   </button>
                 );
               })}

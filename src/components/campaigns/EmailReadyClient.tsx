@@ -11,6 +11,11 @@ import {
   EMAIL_EMPHASIS_PRESETS,
   type EmailEmphasisPreset,
 } from "@/lib/email/typography-emphasis";
+import {
+  EMAIL_LAYOUT_STYLES,
+  DEFAULT_EMAIL_LAYOUT_STYLE,
+  type EmailLayoutStyle,
+} from "@/lib/email/layout-styles";
 
 type Profile = {
   logo_url: string | null;
@@ -18,6 +23,27 @@ type Profile = {
   sender_email: string | null;
   sender_display_name: string | null;
 };
+
+function ReadyLayoutPreviewIcon({ layoutKey, selected }: { layoutKey: EmailLayoutStyle; selected: boolean }) {
+  const accent = selected ? "#6366f1" : "#94a3b8";
+  const line = selected ? "#c7d2fe" : "#e2e8f0";
+  const dark = "#0d0d0d";
+  if (layoutKey === "standard") return (
+    <svg width="40" height="54" viewBox="0 0 40 54" fill="none"><rect width="40" height="54" rx="3" fill="#f8fafc"/><rect width="40" height="20" rx="3" fill={accent}/><rect x="8" y="6" width="24" height="4" rx="1.5" fill="white" opacity=".9"/><rect x="12" y="12" width="16" height="3" rx="1" fill="white" opacity=".6"/><rect x="4" y="24" width="32" height="3" rx="1" fill={line}/><rect x="6" y="30" width="13" height="12" rx="1.5" fill={line}/><rect x="21" y="30" width="13" height="12" rx="1.5" fill={line}/><rect x="4" y="45" width="32" height="2.5" rx="1" fill={line}/><rect x="8" y="49" width="24" height="2" rx="1" fill={line} opacity=".5"/></svg>
+  );
+  if (layoutKey === "editorial") return (
+    <svg width="40" height="54" viewBox="0 0 40 54" fill="none"><rect width="40" height="54" rx="3" fill="#f8fafc"/><rect width="40" height="20" rx="3" fill={accent}/><rect x="4" y="6" width="18" height="4" rx="1.5" fill="white" opacity=".9"/><rect x="4" y="12" width="12" height="2.5" rx="1" fill="white" opacity=".6"/><rect x="0" y="24" width="4" height="22" fill={accent}/><rect x="7" y="27" width="9" height="7" rx="1" fill={line}/><rect x="18" y="27" width="18" height="2.5" rx="1" fill={line}/><rect x="18" y="31" width="14" height="2" rx="1" fill={line} opacity=".5"/><rect x="7" y="38" width="9" height="7" rx="1" fill={line}/><rect x="18" y="38" width="18" height="2.5" rx="1" fill={line}/><rect x="4" y="49" width="32" height="2" rx="1" fill={line} opacity=".4"/></svg>
+  );
+  if (layoutKey === "minimal") return (
+    <svg width="40" height="54" viewBox="0 0 40 54" fill="none"><rect width="40" height="54" rx="3" fill="#f8fafc"/><rect width="40" height="4" rx="2" fill={accent}/><rect x="8" y="8" width="24" height="5" rx="1.5" fill="#1e293b" opacity=".8"/><rect x="12" y="15" width="16" height="2.5" rx="1" fill="#94a3b8"/><rect x="13" y="20" width="14" height="5" rx="2" fill="none" stroke={accent} strokeWidth="1"/><rect x="0" y="29" width="40" height="1" fill={line}/><rect x="6" y="33" width="13" height="11" rx="1.5" fill={line}/><rect x="21" y="33" width="13" height="11" rx="1.5" fill={line}/><rect x="0" y="48" width="40" height="1" fill={line}/></svg>
+  );
+  if (layoutKey === "bold") return (
+    <svg width="40" height="54" viewBox="0 0 40 54" fill="none"><rect width="40" height="54" rx="3" fill="#f8fafc"/><rect width="40" height="26" rx="3" fill={accent}/><rect x="6" y="5" width="28" height="7" rx="2" fill="white" opacity=".9"/><rect x="10" y="14" width="20" height="3" rx="1" fill="white" opacity=".6"/><rect x="0" y="26" width="40" height="5" fill={selected ? "#818cf8" : "#94a3b8"}/><rect x="4" y="35" width="32" height="2.5" rx="1" fill={line}/><rect x="6" y="40" width="13" height="8" rx="1" fill={line}/><rect x="21" y="40" width="13" height="8" rx="1" fill={line}/></svg>
+  );
+  return (
+    <svg width="40" height="54" viewBox="0 0 40 54" fill="none"><rect width="40" height="54" rx="3" fill="#f8fafc"/><rect width="40" height="24" rx="3" fill={dark}/><rect x="8" y="6" width="24" height="5" rx="1.5" fill="white" opacity=".9"/><rect x="12" y="13" width="16" height="3" rx="1" fill="white" opacity=".55"/><rect x="0" y="24" width="40" height="3" fill={accent}/><rect x="4" y="30" width="32" height="2.5" rx="1" fill={line}/><rect x="6" y="35" width="13" height="11" rx="1.5" fill={line}/><rect x="21" y="35" width="13" height="11" rx="1.5" fill={line}/><rect x="0" y="49" width="40" height="5" rx="3" fill={dark}/></svg>
+  );
+}
 
 export function EmailReadyClient({ campaignId }: { campaignId: string }) {
   const t = useTranslations("emailReady");
@@ -27,6 +53,8 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
   const [colorTheme, setColorTheme] = useState<ThemeKey>(DEFAULT_THEME_KEY);
   const [emailFont, setEmailFont] = useState<EmailFontKey>(DEFAULT_EMAIL_FONT_KEY);
   const [emailEmphasis, setEmailEmphasis] = useState<EmailEmphasisPreset>(DEFAULT_EMAIL_EMPHASIS_PRESET);
+  const [emailLayout, setEmailLayout] = useState<EmailLayoutStyle>(DEFAULT_EMAIL_LAYOUT_STYLE);
+  const [layoutSaving, setLayoutSaving] = useState(false);
   const [hasTemplateData, setHasTemplateData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +78,7 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
         email_color_theme?: string | null;
         email_font_family?: string | null;
         email_emphasis_preset?: string | null;
+        email_layout_style?: string | null;
         email_template_data?: Record<string, unknown> | null;
       };
     };
@@ -77,6 +106,12 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       setEmailEmphasis(cJson.campaign.email_emphasis_preset);
     } else {
       setEmailEmphasis(DEFAULT_EMAIL_EMPHASIS_PRESET);
+    }
+    const ls = cJson.campaign.email_layout_style as EmailLayoutStyle | undefined;
+    if (ls && EMAIL_LAYOUT_STYLES.includes(ls)) {
+      setEmailLayout(ls);
+    } else {
+      setEmailLayout(DEFAULT_EMAIL_LAYOUT_STYLE);
     }
     if (pRes.ok) {
       const pJson = (await pRes.json()) as { profile?: Partial<Profile> };
@@ -172,6 +207,24 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
       /* non-critical */
     } finally {
       setEmphasisSaving(false);
+    }
+  }
+
+  async function selectEmailLayout(key: EmailLayoutStyle) {
+    if (key === emailLayout || layoutSaving) return;
+    setEmailLayout(key);
+    setLayoutSaving(true);
+    try {
+      await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_layout_style: key }),
+      });
+      setIframeKey((k) => k + 1);
+    } catch {
+      /* non-critical */
+    } finally {
+      setLayoutSaving(false);
     }
   }
 
@@ -321,9 +374,36 @@ export function EmailReadyClient({ campaignId }: { campaignId: string }) {
             </div>
           </div>
 
-          {(themeSaving || fontSaving || emphasisSaving) && (
+          {/* Layout picker */}
+          <div className="border-t border-zinc-100 pt-5">
+            <h2 className="text-sm font-semibold text-ink">{t("layoutTitle")}</h2>
+            <p className="mt-1 text-sm text-ink-muted">{t("layoutHint")}</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {EMAIL_LAYOUT_STYLES.map((key) => {
+                const selected = emailLayout === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={layoutSaving}
+                    onClick={() => void selectEmailLayout(key)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-2 transition ${
+                      selected ? "border-accent shadow-md" : "border-transparent hover:border-zinc-300"
+                    }`}
+                  >
+                    <ReadyLayoutPreviewIcon layoutKey={key} selected={selected} />
+                    <span className={`text-[10px] leading-tight font-medium ${selected ? "text-ink" : "text-ink-muted"}`}>
+                      {t(`layout_${key}` as "layout_standard")}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {(themeSaving || fontSaving || emphasisSaving || layoutSaving) && (
             <p className="text-xs text-ink-muted">
-              {themeSaving ? t("themeSaving") : fontSaving ? t("fontSaving") : t("emphasisSaving")}
+              {themeSaving ? t("themeSaving") : fontSaving ? t("fontSaving") : layoutSaving ? t("layoutSaving") : t("emphasisSaving")}
             </p>
           )}
         </section>

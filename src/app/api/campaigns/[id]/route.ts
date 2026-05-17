@@ -6,7 +6,7 @@ import { EMAIL_FONTS } from "@/lib/email/fonts";
 type Ctx = { params: Promise<{ id: string }> };
 
 const CAMPAIGN_SELECT =
-  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input, email_template_type, email_template_data, email_color_theme, email_font_family, email_emphasis_preset, moderation_note";
+  "id, name, status, audience_id, send_immediately, scheduled_at, created_at, channel, email_subject, email_html, email_include_all, email_selected_member_ids, email_generation_input, email_template_type, email_template_data, email_color_theme, email_font_family, email_emphasis_preset, email_layout_style, moderation_note";
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -89,6 +89,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       email_color_theme?: string | null;
       email_font_family?: string | null;
       email_emphasis_preset?: string | null;
+      email_layout_style?: string | null;
     };
     if (typeof body.name === "string") payload.name = body.name.trim() || "Untitled campaign";
     if ("audience_id" in body) payload.audience_id = body.audience_id;
@@ -141,6 +142,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (typeof body.email_emphasis_preset === "string" && body.email_emphasis_preset.trim()) {
       const ek = body.email_emphasis_preset.trim();
       if (ek === "balanced" || ek === "bold") payload.email_emphasis_preset = ek;
+    }
+    if (typeof body.email_layout_style === "string" && body.email_layout_style.trim()) {
+      const lk = body.email_layout_style.trim();
+      if (lk === "standard" || lk === "editorial" || lk === "minimal" || lk === "bold" || lk === "spotlight") {
+        payload.email_layout_style = lk;
+      }
     }
 
     payload.updated_at = new Date().toISOString();

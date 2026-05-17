@@ -380,7 +380,15 @@
     "emphasisHint": "Bold keeps strong headlines and buttons (default). Balanced softens weights for a calmer look while keeping hierarchy.",
     "emphasisBold": "Bold",
     "emphasisBalanced": "Balanced",
-    "emphasisSaving": "Applying emphasis…"
+    "emphasisSaving": "Applying emphasis…",
+    "layoutTitle": "Layout",
+    "layoutHint": "Choose a visual arrangement for the email. Each layout changes the structure, hero, and card style.",
+    "layoutSaving": "Applying layout…",
+    "layout_standard": "Standard",
+    "layout_editorial": "Editorial",
+    "layout_minimal": "Minimal",
+    "layout_bold": "Bold",
+    "layout_spotlight": "Spotlight"
   },
   "emails": {
     "title": "Emails",

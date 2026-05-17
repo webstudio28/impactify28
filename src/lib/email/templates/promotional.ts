@@ -1,54 +1,53 @@
 import type { EmailFontDefinition } from "../fonts";
 import { getEmailStrings } from "../strings";
+import { getLayoutStyle, type EmailLayoutStyle } from "../layout-styles";
+import { makeLayoutCtx } from "./layout-context";
 import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { PromotionalData, RenderResult } from "./types";
-import { esc, emailWrapper, ctaButton, productGrid, heroBannerRow } from "./shared";
+import { esc, emailWrapper, sectionDivider } from "./shared";
 
 export function renderPromotional(
   data: PromotionalData,
   theme: ColorTheme,
   font: EmailFontDefinition,
-  w: EmailWeights
+  w: EmailWeights,
+  layoutStyle: EmailLayoutStyle = "standard"
 ): RenderResult {
   const s = getEmailStrings(data.language);
+  const ctx = makeLayoutCtx(getLayoutStyle(layoutStyle), theme, font, w);
   const hasProducts = data.products.length > 0;
 
-  const heroInner = `<h1 style="margin:0;color:${theme.heroText};font-size:36px;font-weight:${w.hero};line-height:1.15;letter-spacing:-0.5px;">${esc(data.heroHeadline)}</h1>
-      ${
-        data.supportingLine
-          ? `<p style="margin:16px 0 0;color:rgba(255,255,255,0.88);font-size:17px;font-weight:${w.heroSub};line-height:1.5;">${esc(data.supportingLine)}</p>`
-          : ""
-      }
-      <div style="margin-top:32px;">
-        ${ctaButton(data.ctaText, data.ctaUrl, theme, font, w.cta)}
-      </div>`;
-
-  const heroRow = heroBannerRow(heroInner, theme, data.heroImageUrl);
+  const heroInner = `<h1 style="margin:0;color:${ctx.heroTextColor};font-size:${ctx.heroFontSize}px;font-weight:${w.hero};line-height:1.15;letter-spacing:${ctx.heroLetterSpacing};text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(data.heroHeadline)}</h1>${
+    data.supportingLine
+      ? `<p style="margin:16px 0 0;color:${ctx.heroSubColor};font-size:${ctx.heroSubFontSize}px;font-weight:${w.heroSub};line-height:1.5;text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(data.supportingLine)}</p>`
+      : ""
+  }<div style="margin-top:32px;text-align:${ctx.heroAlign};">${ctx.ctaButton(data.ctaText, data.ctaUrl, w.cta)}</div>`;
 
   const offerRow = data.offerDescription
-    ? `<tr>
-    <td style="padding:36px 40px;background-color:${theme.bgLight};text-align:center;">
-      <p style="margin:0;font-size:14px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1px;color:${theme.accent};">${esc(s.theOffer)}</p>
-      <p style="margin:12px 0 0;font-size:17px;color:${theme.text};line-height:1.65;">${esc(data.offerDescription)}</p>
-    </td>
-  </tr>`
+    ? ctx.offerRow(s.theOffer, data.offerDescription)
     : "";
 
-  const productsHtml = hasProducts ? productGrid(data.products, theme, font, w, s) : "";
+  const productsHtml = hasProducts ? ctx.productGrid(data.products, s) : "";
 
   const secondaryCta = hasProducts
-    ? `<tr>
+    ? `${sectionDivider()}<tr>
     <td style="padding:8px 40px 40px;text-align:center;">
-      ${ctaButton(data.ctaText, data.ctaUrl, theme, font, w.cta)}
+      ${ctx.ctaButton(data.ctaText, data.ctaUrl, w.cta)}
     </td>
   </tr>`
     : "";
 
-  const content = [heroRow, offerRow, productsHtml, secondaryCta].join("\n");
+  const content = [
+    ctx.hero(heroInner, data.heroImageUrl),
+    ctx.accentStrip(),
+    offerRow,
+    productsHtml,
+    secondaryCta,
+  ].join("\n");
 
   return {
-    html: emailWrapper(content, theme, font, s, data.language),
+    html: emailWrapper(content, theme, font, s, data.language, ctx.footerStyle),
     subject: data.subjectLine,
   };
 }

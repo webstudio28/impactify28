@@ -85,7 +85,11 @@ export async function POST(_req: Request, ctx: Ctx) {
         typeof campaign.email_emphasis_preset === "string" && campaign.email_emphasis_preset.trim()
           ? campaign.email_emphasis_preset.trim()
           : undefined;
-      const rendered = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey);
+      const layoutKey =
+        typeof campaign.email_layout_style === "string" && campaign.email_layout_style.trim()
+          ? campaign.email_layout_style.trim()
+          : undefined;
+      const rendered = renderEmailTemplate(templateData, colorTheme, fontKey, emphasisKey, layoutKey);
       emailSubject = rendered.subject;
       emailHtml = rendered.html;
 
