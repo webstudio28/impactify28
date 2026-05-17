@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -509,7 +509,7 @@ export function EmailBuilderStep({
 
   const cfg = TEMPLATE_CONFIGS[templateType];
 
-  // ── Shared field sections ──────────────────────────────────────────────────
+  // â”€â”€ Shared field sections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const senderSection = (
     <div className="space-y-3 rounded-lg border border-zinc-100 bg-zinc-50 p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{t("senderSection")}</p>
@@ -545,9 +545,9 @@ export function EmailBuilderStep({
         <label className="text-xs font-medium text-ink-muted">{t("language")}</label>
         <select value={fields.language} onChange={(e) => patch({ language: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
           <option value="en">English</option>
-          <option value="bg">Български</option>
+          <option value="bg">Ð‘ÑŠÐ»Ð³Ð°Ñ€ÑÐºÐ¸</option>
           <option value="de">Deutsch</option>
-          <option value="fr">Français</option>
+          <option value="fr">FranÃ§ais</option>
         </select>
       </div>
     </div>
@@ -617,16 +617,134 @@ export function EmailBuilderStep({
             if (f) void uploadLogo(f);
           }}
         />
-        {logoUploading ? "Uploading…" : tReady("uploadLogo")}
+        {logoUploading ? "Uploadingâ€¦" : tReady("uploadLogo")}
       </label>
+    </div>
+  );
+
+  const designPanel = (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm space-y-5">
+      <div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-ink">{tReady("themeTitle")}</p>
+          <p className="text-xs text-ink-muted">{tReady("themeHint")}</p>
+          <div className="flex flex-wrap gap-2">
+            {THEME_KEYS.map((key) => {
+              const theme = COLOR_THEMES[key];
+              const selected = colorTheme === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  title={theme.label}
+                  onClick={() => void selectTheme(key)}
+                  className={`flex flex-col items-center gap-1 rounded-lg border-2 p-1.5 transition ${
+                    selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
+                  }`}
+                >
+                  <div className="flex overflow-hidden rounded-full shadow-sm">
+                    <div className="h-5 w-5" style={{ backgroundColor: theme.primary }} />
+                    <div className="h-5 w-5" style={{ backgroundColor: theme.accent }} />
+                    <div className="h-5 w-5" style={{ backgroundColor: theme.bg }} />
+                  </div>
+                  <span className={`max-w-[72px] text-center text-[9px] leading-tight ${selected ? "font-semibold text-ink" : "text-ink-muted"}`}>
+                    {theme.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3 border-t border-zinc-100 pt-5 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6 sm:border-zinc-100">
+          <p className="text-xs font-semibold text-ink">{tReady("fontTitle")}</p>
+          <p className="text-xs text-ink-muted">{tReady("fontHint")}</p>
+          <div className="flex flex-wrap gap-2">
+            {EMAIL_FONT_KEYS.map((key) => {
+              const def = EMAIL_FONTS[key];
+              const selected = emailFont === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  title={def.label}
+                  onClick={() => void selectEmailFont(key)}
+                  className={`flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-lg border-2 px-2 py-1.5 transition ${
+                    selected ? "border-accent bg-accent/5 shadow-sm" : "border-transparent hover:border-zinc-200"
+                  }`}
+                >
+                  <span
+                    className={`text-[13px] font-semibold leading-none ${selected ? "text-ink" : "text-ink-muted"}`}
+                    style={{ fontFamily: def.stackCss }}
+                  >
+                    Aa Бг
+                  </span>
+                  <span className={`max-w-[88px] text-center text-[9px] leading-tight ${selected ? "font-medium text-ink" : "text-ink-muted"}`}>
+                    {def.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-zinc-100 pt-4">
+        <p className="text-xs font-semibold text-ink">{tReady("emphasisTitle")}</p>
+        <p className="text-xs text-ink-muted">{tReady("emphasisHint")}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {EMAIL_EMPHASIS_PRESETS.map((key) => {
+            const selected = emailEmphasis === key;
+            const label = key === "bold" ? tReady("emphasisBold") : tReady("emphasisBalanced");
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => void selectEmailEmphasis(key)}
+                className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition ${
+                  selected
+                    ? "border-accent bg-accent/5 text-ink shadow-sm"
+                    : "border-transparent bg-zinc-50 text-ink-muted hover:border-zinc-200 hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border-t border-zinc-100 pt-4">
+        <p className="text-xs font-semibold text-ink">{tReady("layoutTitle")}</p>
+        <p className="text-xs text-ink-muted">{tReady("layoutHint")}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {EMAIL_LAYOUT_STYLES.map((key) => {
+            const selected = emailLayout === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => void selectEmailLayout(key)}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-2 transition ${
+                  selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
+                }`}
+              >
+                <LayoutPreviewIcon layoutKey={key} selected={selected} />
+                <span className={`text-[9px] leading-tight font-medium ${selected ? "text-ink" : "text-ink-muted"}`}>
+                  {tReady(`layout_${key}` as "layout_standard")}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 
   return (
     <div className="grid gap-6 lg:grid-cols-[5fr_6fr] lg:items-start">
 
-      {/* ── LEFT COLUMN: form ── */}
-      <div className="space-y-6">
+      <div className="space-y-6 min-w-0">
         {senderSection}
         {commonFields}
 
@@ -724,6 +842,8 @@ export function EmailBuilderStep({
 
         {logoSection}
 
+        {designPanel}
+
         {error && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
@@ -736,7 +856,7 @@ export function EmailBuilderStep({
             disabled={busy}
             className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink disabled:opacity-40"
           >
-            ← Back
+            â† Back
           </button>
           <button
             type="button"
@@ -750,8 +870,8 @@ export function EmailBuilderStep({
         <p className="text-xs text-ink-muted">{tReady("emailCompliance")}</p>
       </div>
 
-      {/* ── RIGHT COLUMN: live preview ── */}
-      <div className="lg:sticky lg:top-4 lg:self-start space-y-4">
+      {/* Preview */}
+      <div className="lg:sticky lg:top-4 lg:self-start space-y-4 min-w-0">
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-xs font-medium">
@@ -776,7 +896,7 @@ export function EmailBuilderStep({
             onClick={() => setRefreshTick((n) => n + 1)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-ink-muted hover:bg-zinc-50 hover:text-ink transition"
           >
-            ↺
+            â†º
           </button>
         </div>
 
@@ -797,128 +917,6 @@ export function EmailBuilderStep({
           )}
         </div>
 
-        {/* Color theme + typography + emphasis */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm space-y-5">
-          <div className="grid gap-6 md:grid-cols-2 md:gap-8">
-            <div className="space-y-3 md:pr-2">
-              <div>
-                <p className="text-xs font-semibold text-ink">{tReady("themeTitle")}</p>
-                <p className="mt-0.5 text-xs text-ink-muted">{tReady("themeHint")}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {THEME_KEYS.map((key) => {
-                  const theme = COLOR_THEMES[key];
-                  const selected = colorTheme === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      title={theme.label}
-                      onClick={() => void selectTheme(key)}
-                      className={`flex flex-col items-center gap-1 rounded-lg border-2 p-1.5 transition ${
-                        selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
-                      }`}
-                    >
-                      <div className="flex overflow-hidden rounded-full shadow-sm">
-                        <div className="h-5 w-5" style={{ backgroundColor: theme.primary }} />
-                        <div className="h-5 w-5" style={{ backgroundColor: theme.accent }} />
-                        <div className="h-5 w-5" style={{ backgroundColor: theme.bg }} />
-                      </div>
-                      <span className={`max-w-[72px] text-center text-[9px] leading-tight ${selected ? "font-semibold text-ink" : "text-ink-muted"}`}>
-                        {theme.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-3 border-t border-zinc-100 pt-5 md:border-t-0 md:border-l md:pt-0 md:pl-6 md:border-zinc-100">
-              <div>
-                <p className="text-xs font-semibold text-ink">{tReady("fontTitle")}</p>
-                <p className="mt-0.5 text-xs text-ink-muted">{tReady("fontHint")}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {EMAIL_FONT_KEYS.map((key) => {
-                  const def = EMAIL_FONTS[key];
-                  const selected = emailFont === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      title={def.label}
-                      onClick={() => void selectEmailFont(key)}
-                      className={`flex min-w-[5.5rem] flex-col items-center gap-0.5 rounded-lg border-2 px-2 py-1.5 transition ${
-                        selected ? "border-accent bg-accent/5 shadow-sm" : "border-transparent hover:border-zinc-200"
-                      }`}
-                    >
-                      <span
-                        className={`text-[13px] font-semibold leading-none ${selected ? "text-ink" : "text-ink-muted"}`}
-                        style={{ fontFamily: def.stackCss }}
-                      >
-                        Aa Бг
-                      </span>
-                      <span className={`max-w-[88px] text-center text-[9px] leading-tight ${selected ? "font-medium text-ink" : "text-ink-muted"}`}>
-                        {def.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-zinc-100 pt-4">
-            <p className="text-xs font-semibold text-ink">{tReady("emphasisTitle")}</p>
-            <p className="mt-0.5 text-xs text-ink-muted">{tReady("emphasisHint")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {EMAIL_EMPHASIS_PRESETS.map((key) => {
-                const selected = emailEmphasis === key;
-                const label = key === "bold" ? tReady("emphasisBold") : tReady("emphasisBalanced");
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => void selectEmailEmphasis(key)}
-                    className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition ${
-                      selected
-                        ? "border-accent bg-accent/5 text-ink shadow-sm"
-                        : "border-transparent bg-zinc-50 text-ink-muted hover:border-zinc-200 hover:text-ink"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Layout picker */}
-          <div className="border-t border-zinc-100 pt-4">
-            <p className="text-xs font-semibold text-ink">{tReady("layoutTitle")}</p>
-            <p className="mt-0.5 text-xs text-ink-muted">{tReady("layoutHint")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {EMAIL_LAYOUT_STYLES.map((key) => {
-                const selected = emailLayout === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => void selectEmailLayout(key)}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-2 transition ${
-                      selected ? "border-accent shadow-sm" : "border-transparent hover:border-zinc-200"
-                    }`}
-                  >
-                    <LayoutPreviewIcon layoutKey={key} selected={selected} />
-                    <span className={`text-[9px] leading-tight font-medium ${selected ? "text-ink" : "text-ink-muted"}`}>
-                      {tReady(`layout_${key}` as "layout_standard")}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </div>
 
     </div>
