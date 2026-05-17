@@ -385,9 +385,9 @@
     "layoutHint": "Choose a visual arrangement for the email. Each layout changes the structure, hero, and card style.",
     "layoutSaving": "Applying layout…",
     "layout_standard": "Standard",
-    "layout_editorial": "Editorial",
-    "layout_minimal": "Minimal",
-    "layout_bold": "Bold",
+    "layout_paper": "Paper",
+    "layout_dark": "Dark Drop",
+    "layout_split": "Clean Split",
     "layout_spotlight": "Spotlight"
   },
   "emails": {

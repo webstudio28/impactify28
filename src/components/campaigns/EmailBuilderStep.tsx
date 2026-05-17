@@ -165,13 +165,14 @@ function buildTemplateData(type: EmailTemplateType, f: FormFields): EmailTemplat
 function LayoutPreviewIcon({ layoutKey, selected }: { layoutKey: EmailLayoutStyle; selected: boolean }) {
   const accent = selected ? "#6366f1" : "#94a3b8";
   const line = selected ? "#c7d2fe" : "#e2e8f0";
-  const dark = "#0d0d0d";
+  const dark = "#111111";
 
+  // Standard: centered hero + 2-col product grid
   if (layoutKey === "standard") {
     return (
       <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
-        <rect x="0" y="0" width="40" height="20" rx="3" fill={accent} />
+        <rect width="40" height="54" rx="3" fill="#f8fafc" />
+        <rect width="40" height="20" rx="3" fill={accent} />
         <rect x="8" y="6" width="24" height="4" rx="1.5" fill="white" opacity="0.9" />
         <rect x="12" y="12" width="16" height="3" rx="1" fill="white" opacity="0.6" />
         <rect x="4" y="24" width="32" height="3" rx="1" fill={line} />
@@ -183,70 +184,74 @@ function LayoutPreviewIcon({ layoutKey, selected }: { layoutKey: EmailLayoutStyl
     );
   }
 
-  if (layoutKey === "editorial") {
+  // Paper: gradient hero left-aligned + horizontal product rows + dark band
+  if (layoutKey === "paper") {
     return (
       <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
-        <rect x="0" y="0" width="40" height="20" rx="3" fill={accent} />
-        <rect x="4" y="6" width="18" height="4" rx="1.5" fill="white" opacity="0.9" />
-        <rect x="4" y="12" width="12" height="2.5" rx="1" fill="white" opacity="0.6" />
-        <rect x="0" y="24" width="4" height="22" rx="0" fill={accent} />
-        <rect x="7" y="27" width="9" height="7" rx="1" fill={line} />
-        <rect x="18" y="27" width="18" height="2.5" rx="1" fill={line} />
-        <rect x="18" y="31" width="14" height="2" rx="1" fill={line} opacity="0.5" />
-        <rect x="7" y="38" width="9" height="7" rx="1" fill={line} />
-        <rect x="18" y="38" width="18" height="2.5" rx="1" fill={line} />
-        <rect x="18" y="42" width="14" height="2" rx="1" fill={line} opacity="0.5" />
-        <rect x="4" y="49" width="32" height="2" rx="1" fill={line} opacity="0.4" />
+        <rect width="40" height="54" rx="3" fill="#faf8f4" />
+        <rect width="40" height="22" rx="3" fill={accent} />
+        <rect x="4" y="13" width="20" height="4" rx="1.5" fill="white" opacity="0.9" />
+        <rect x="4" y="18" width="13" height="2.5" rx="1" fill="white" opacity="0.6" />
+        <rect x="3" y="25" width="7" height="7" rx="1" fill={line} />
+        <rect x="13" y="26" width="20" height="2.5" rx="1" fill={line} />
+        <rect x="13" y="30" width="14" height="2" rx="1" fill={line} opacity="0.5" />
+        <rect x="3" y="35" width="7" height="7" rx="1" fill={line} />
+        <rect x="13" y="36" width="20" height="2.5" rx="1" fill={line} />
+        <rect x="13" y="40" width="14" height="2" rx="1" fill={line} opacity="0.5" />
+        <rect width="40" height="7" rx="3" fill={dark} y="47" />
       </svg>
     );
   }
 
-  if (layoutKey === "minimal") {
+  // Dark Drop: all-dark, centered big text, accent strip, flush dark cards
+  if (layoutKey === "dark") {
     return (
       <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
-        <rect x="0" y="0" width="40" height="4" rx="2" fill={accent} />
-        <rect x="8" y="8" width="24" height="5" rx="1.5" fill="#1e293b" opacity="0.8" />
-        <rect x="12" y="15" width="16" height="2.5" rx="1" fill="#94a3b8" />
-        <rect x="13" y="20" width="14" height="5" rx="2" fill="none" stroke={accent} strokeWidth="1" />
-        <rect x="0" y="29" width="40" height="1" fill={line} />
-        <rect x="6" y="33" width="13" height="11" rx="1.5" fill={line} />
-        <rect x="21" y="33" width="13" height="11" rx="1.5" fill={line} />
-        <rect x="0" y="48" width="40" height="1" fill={line} />
-        <rect x="8" y="51" width="24" height="2" rx="1" fill={line} opacity="0.5" />
+        <rect width="40" height="54" rx="3" fill={dark} />
+        <rect width="40" height="22" rx="3" fill="#1a1a1a" />
+        <rect x="7" y="7" width="26" height="6" rx="1.5" fill="white" opacity="0.85" />
+        <rect x="11" y="15" width="18" height="2.5" rx="1" fill="white" opacity="0.4" />
+        <rect width="40" height="3" y="22" fill={accent} />
+        <rect x="0" y="27" width="19" height="14" fill="#1e1e1e" />
+        <rect x="21" y="27" width="19" height="14" fill="#1e1e1e" />
+        <rect x="0" y="43" width="19" height="11" rx="3" fill="#1a1a1a" />
+        <rect x="21" y="43" width="19" height="11" rx="3" fill="#1a1a1a" />
       </svg>
     );
   }
 
-  if (layoutKey === "bold") {
+  // Clean Split: 50/50 hero (dark left + image right) + 3-col grid
+  if (layoutKey === "split") {
     return (
       <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
-        <rect x="0" y="0" width="40" height="26" rx="3" fill={accent} />
-        <rect x="6" y="5" width="28" height="7" rx="2" fill="white" opacity="0.9" />
-        <rect x="10" y="14" width="20" height="3" rx="1" fill="white" opacity="0.6" />
-        <rect x="0" y="26" width="40" height="5" rx="0" fill={selected ? "#818cf8" : "#94a3b8"} />
-        <rect x="4" y="35" width="32" height="2.5" rx="1" fill={line} />
-        <rect x="6" y="40" width="13" height="8" rx="1" fill={line} />
-        <rect x="21" y="40" width="13" height="8" rx="1" fill={line} />
-        <rect x="4" y="51" width="32" height="2" rx="1" fill={line} opacity="0.4" />
+        <rect width="40" height="54" rx="3" fill="#f8fafc" />
+        <rect width="23" height="22" rx="3" fill={dark} />
+        <rect x="23" width="17" height="22" rx="3" fill={accent} opacity="0.7" />
+        <rect x="3" y="7" width="16" height="4" rx="1.5" fill="white" opacity="0.9" />
+        <rect x="3" y="13" width="11" height="2.5" rx="1" fill="white" opacity="0.55" />
+        <rect x="0" y="24" width="40" height="1" fill={line} />
+        <rect x="2" y="28" width="11" height="13" rx="1" fill={line} />
+        <rect x="15" y="28" width="11" height="13" rx="1" fill={line} />
+        <rect x="28" y="28" width="11" height="13" rx="1" fill={line} />
+        <rect x="4" y="44" width="32" height="2.5" rx="1" fill={line} opacity="0.5" />
+        <rect x="8" y="49" width="24" height="2" rx="1" fill={line} opacity="0.3" />
       </svg>
     );
   }
 
-  // spotlight
+  // Spotlight: full-bleed photo top, dark text section, 2x2 numbered dark cards
   return (
     <svg width="40" height="54" viewBox="0 0 40 54" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="40" height="54" rx="3" fill="#f8fafc" />
-      <rect x="0" y="0" width="40" height="24" rx="3" fill={dark} />
-      <rect x="8" y="6" width="24" height="5" rx="1.5" fill="white" opacity="0.9" />
-      <rect x="12" y="13" width="16" height="3" rx="1" fill="white" opacity="0.55" />
-      <rect x="0" y="24" width="40" height="3" rx="0" fill={accent} />
-      <rect x="4" y="30" width="32" height="2.5" rx="1" fill={line} />
-      <rect x="6" y="35" width="13" height="11" rx="1.5" fill={line} />
-      <rect x="21" y="35" width="13" height="11" rx="1.5" fill={line} />
-      <rect x="0" y="49" width="40" height="5" rx="3" fill={dark} />
+      <rect width="40" height="54" rx="3" fill="#0c0c0c" />
+      <rect width="40" height="20" rx="3" fill={accent} opacity="0.55" />
+      <rect width="40" height="7" y="20" fill="#0c0c0c" />
+      <rect x="8" y="22" width="24" height="3.5" rx="1" fill="white" opacity="0.8" />
+      <rect x="12" y="27" width="16" height="2" rx="1" fill="white" opacity="0.35" />
+      <rect width="40" height="3" y="31" fill={accent} />
+      <rect x="0" y="34" width="19" height="10" fill="#161616" />
+      <rect x="21" y="34" width="19" height="10" fill="#161616" />
+      <rect x="0" y="45" width="19" height="9" rx="3" fill="#161616" />
+      <rect x="21" y="45" width="19" height="9" rx="3" fill="#161616" />
     </svg>
   );
 }

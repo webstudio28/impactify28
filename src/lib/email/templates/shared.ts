@@ -23,6 +23,12 @@ export function emailWrapper(
 ): string {
   const ff = font.stackCss;
   const lang = emailHtmlLang(language);
+  const isDark = footerStyle === "dark";
+  const outerBg = isDark ? "#0a0a0a" : theme.bg;
+  const innerBg = isDark ? "#0c0c0c" : "#ffffff";
+  const tableStyle = isDark
+    ? `max-width:600px;width:100%;background-color:${innerBg};font-family:${ff};`
+    : `max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:${ff};`;
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -34,11 +40,11 @@ export function emailWrapper(
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="${font.googleFontsCssHref}" />
 </head>
-<body style="margin:0;padding:0;background-color:${theme.bg};font-family:${ff};-webkit-font-smoothing:antialiased;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${theme.bg};font-family:${ff};">
+<body style="margin:0;padding:0;background-color:${outerBg};font-family:${ff};-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${outerBg};font-family:${ff};">
     <tr>
       <td align="center" style="padding:32px 16px;font-family:${ff};">
-        <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);font-family:${ff};">
+        <table width="600" cellpadding="0" cellspacing="0" border="0" style="${tableStyle}">
           {{COMPANY_LOGO}}
           ${content}
           ${emailFooter(theme, ff, strings, footerStyle)}

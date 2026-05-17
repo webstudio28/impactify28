@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Demo 2 — DARK DROP</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;0,700;1,300&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; padding: 32px 16px; background: #0a0a0a; font-family: 'Barlow', sans-serif; }
+  .wrap { max-width: 600px; margin: 0 auto; background: #111; }
+  /* HEADER */
+  .header { padding: 20px 36px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 4px; color: #fff; }
+  .header-date { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: #666; }
+  /* ANNOUNCEMENT BAND */
+  .announce { background: #e02020; padding: 10px 36px; text-align: center; }
+  .announce p { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: #fff; }
+  /* HERO */
+  .hero { position: relative; background: #000; }
+  .hero img { display: block; width: 100%; height: 380px; object-fit: cover; opacity: 0.55; }
+  .hero-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px; }
+  .hero-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 4px; color: #e02020; margin: 0 0 16px; }
+  .hero h1 { font-family: 'Bebas Neue', sans-serif; font-size: 80px; letter-spacing: 4px; line-height: 0.92; color: #fff; margin: 0 0 20px; text-transform: uppercase; }
+  .hero-sub { font-size: 14px; font-weight: 300; color: rgba(255,255,255,0.65); line-height: 1.7; margin: 0 0 32px; max-width: 380px; }
+  .hero-cta { display: inline-block; background: #e02020; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; text-decoration: none; padding: 14px 36px; }
+  /* OFFER STATS ROW */
+  .stats { display: flex; background: #161616; border-top: 1px solid #222; border-bottom: 1px solid #222; }
+  .stat { flex: 1; padding: 24px 16px; text-align: center; border-right: 1px solid #222; }
+  .stat:last-child { border-right: none; }
+  .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 40px; letter-spacing: 2px; color: #e02020; line-height: 1; }
+  .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-top: 4px; }
+  /* PRODUCT GRID — 2 col full-bleed cards */
+  .products { display: flex; gap: 2px; padding: 2px; background: #222; }
+  .product-card { flex: 1; background: #111; overflow: hidden; }
+  .product-card img { display: block; width: 100%; height: 200px; object-fit: cover; }
+  .product-info { padding: 16px 18px 20px; }
+  .product-name { font-size: 13px; font-weight: 700; color: #fff; margin: 0 0 6px; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.5px; }
+  .product-desc { font-size: 12px; color: #666; line-height: 1.55; margin: 0 0 14px; font-weight: 300; }
+  .product-link { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #e02020; text-decoration: none; }
+  /* COUPON */
+  .coupon { padding: 36px 40px; background: #161616; text-align: center; border-top: 1px solid #222; }
+  .coupon-title { font-size: 11px; text-transform: uppercase; letter-spacing: 3px; color: #666; margin: 0 0 16px; }
+  .coupon-code { display: inline-block; border: 2px dashed #e02020; padding: 14px 40px; font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 6px; color: #fff; margin-bottom: 16px; }
+  .coupon-note { font-size: 12px; color: #555; font-style: italic; margin: 0 0 24px; }
+  .coupon-cta { display: inline-block; background: #e02020; color: #fff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; text-decoration: none; padding: 14px 40px; }
+  /* FOOTER */
+  .footer { padding: 24px 36px; border-top: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+  .footer-brand { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 3px; color: #333; }
+  .footer-links { font-size: 11px; color: #444; }
+  .footer-links a { color: #444; text-decoration: none; margin-left: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <span class="brand">ROCKBUNKER</span>
+    <span class="header-date">Май 2026</span>
+  </div>
+
+  <!-- Announcement band -->
+  <div class="announce">
+    <p>🔥 Ограничена оферта — само до края на май</p>
+  </div>
+
+  <!-- Hero: dark, heavy type, dead-center -->
+  <div class="hero">
+    <img src="https://www.rockbunkerbg.com/wp-content/uploads/2025/12/70686.jpg" alt="Iron Maiden" />
+    <div class="hero-overlay">
+      <p class="hero-tag">Ново пристигане</p>
+      <h1>До<br>20%<br>OFF</h1>
+      <p class="hero-sub">Официалната Iron Maiden Senjutsu тениска е тук. Самурай Еди се завърна.</p>
+      <a class="hero-cta" href="#">Вземи сега</a>
+    </div>
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num">20%</div>
+      <div class="stat-label">Отстъпка</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">48ч</div>
+      <div class="stat-label">Остават</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">100%</div>
+      <div class="stat-label">Оригинален</div>
+    </div>
+  </div>
+
+  <!-- 2-col product cards, flush edge-to-edge -->
+  <div class="products">
+    <div class="product-card">
+      <img src="https://www.rockbunkerbg.com/wp-content/uploads/2025/12/70686.jpg" alt="Product 1" />
+      <div class="product-info">
+        <p class="product-name">Iron Maiden Senjutsu</p>
+        <p class="product-desc">Официална метъл тениска с дизайн на Самурай Еди.</p>
+        <a class="product-link" href="#">Виж →</a>
+      </div>
+    </div>
+    <div class="product-card">
+      <img src="https://www.rockbunkerbg.com/wp-content/uploads/2025/12/70686.jpg" alt="Product 2" />
+      <div class="product-info">
+        <p class="product-name">Iron Maiden Senjutsu</p>
+        <p class="product-desc">Официална метъл тениска с дизайн на Самурай Еди.</p>
+        <a class="product-link" href="#">Виж →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coupon section -->
+  <div class="coupon">
+    <p class="coupon-title">Твоят код за отстъпка</p>
+    <div class="coupon-code">MAIDEN20</div>
+    <p class="coupon-note">Въведи при финализиране на поръчката. Важи до 31 май.</p>
+    <a class="coupon-cta" href="#">Пазарувай сега</a>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span class="footer-brand">ROCKBUNKER</span>
+    <span class="footer-links">
+      <a href="#">Отписване</a>
+      <a href="#">Виж в браузър</a>
+    </span>
+  </div>
+
+</div>
+</body>
+</html>

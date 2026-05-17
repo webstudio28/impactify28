@@ -385,9 +385,9 @@
     "layoutHint": "Изберете визуална наредба за имейла. Всяко оформление променя структурата, банера и стила на картите.",
     "layoutSaving": "Прилагане на оформлението…",
     "layout_standard": "Стандартно",
-    "layout_editorial": "Редакционно",
-    "layout_minimal": "Минималистично",
-    "layout_bold": "Смело",
+    "layout_paper": "Вестник",
+    "layout_dark": "Тъмно",
+    "layout_split": "Разделен",
     "layout_spotlight": "Прожектор"
   },
   "emails": {
