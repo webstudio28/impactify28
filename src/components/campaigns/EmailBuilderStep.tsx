@@ -292,6 +292,7 @@ export function EmailBuilderStep({
 }: Props) {
   const t = useTranslations("emailWizard");
   const tReady = useTranslations("emailReady");
+  const tLocale = useTranslations("locale");
 
   const [fields, setFields] = useState<FormFields>(() => {
     if (initialData) return fieldsFromData(initialData);
@@ -549,10 +550,10 @@ export function EmailBuilderStep({
       <div>
         <label className="text-xs font-medium text-ink-muted">{t("language")}</label>
         <select value={fields.language} onChange={(e) => patch({ language: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
-          <option value="en">English</option>
-          <option value="bg">Ð‘ÑŠÐ»Ð³Ð°Ñ€ÑÐºÐ¸</option>
-          <option value="de">Deutsch</option>
-          <option value="fr">FranÃ§ais</option>
+          <option value="en">{tLocale("en")}</option>
+          <option value="bg">{tLocale("bg")}</option>
+          <option value="de">{tLocale("de")}</option>
+          <option value="fr">{tLocale("fr")}</option>
         </select>
       </div>
     </div>
@@ -622,7 +623,7 @@ export function EmailBuilderStep({
             if (f) void uploadLogo(f);
           }}
         />
-        {logoUploading ? "Uploadingâ€¦" : tReady("uploadLogo")}
+        {logoUploading ? tReady("logoUploading") : tReady("uploadLogo")}
       </label>
     </div>
   );
@@ -861,7 +862,7 @@ export function EmailBuilderStep({
             disabled={busy}
             className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink disabled:opacity-40"
           >
-            â† Back
+            {t("back")}
           </button>
           <button
             type="button"
@@ -897,11 +898,15 @@ export function EmailBuilderStep({
           </div>
           <button
             type="button"
-            title="Refresh preview"
+            title={t("refreshPreview")}
             onClick={() => setRefreshTick((n) => n + 1)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-ink-muted hover:bg-zinc-50 hover:text-ink transition"
+            aria-label={t("refreshPreview")}
           >
-            â†º
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
           </button>
         </div>
 

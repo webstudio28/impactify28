@@ -12,7 +12,9 @@
   },
   "locale": {
     "en": "English",
-    "bg": "Български"
+    "bg": "Български",
+    "de": "Deutsch",
+    "fr": "Français"
   },
   "nav": {
     "overview": "Overview",
@@ -332,7 +334,9 @@
     "templateDataRequired": "Fill in the required fields before building the email.",
     "buildEmail": "Build email",
     "building": "Building…",
-    "generateFailed": "Could not build email"
+    "generateFailed": "Could not build email",
+    "back": "← Back",
+    "refreshPreview": "Refresh preview"
   },
   "emailReady": {
     "intro": "Review the generated email and add your logo if needed, then submit the campaign for approval.",
@@ -351,6 +355,7 @@
     "logoOnFile": "A logo is on file for your account.",
     "logoMissing": "No logo yet — the preview shows a placeholder until you upload one.",
     "uploadLogo": "Upload logo",
+    "logoUploading": "Uploading…",
     "logoFailed": "Logo upload failed",
     "previewTitle": "Previews",
     "desktop": "Desktop",
