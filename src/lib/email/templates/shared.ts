@@ -13,6 +13,29 @@ export function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Classes for responsive title sizing — paired with emailResponsiveStyles() in the wrapper. */
+export const EMAIL_H1_CLASS = "email-title email-h1";
+export const EMAIL_H2_CLASS = "email-title email-h2";
+export const EMAIL_H3_CLASS = "email-title email-h3";
+export const EMAIL_HERO_SUB_CLASS = "email-hero-sub";
+export const EMAIL_COUPON_CODE_CLASS = "email-coupon-code";
+export const EMAIL_PRODUCT_TITLE_CLASS = "email-product-title";
+
+function emailResponsiveStyles(): string {
+  return `<style type="text/css">
+@media only screen and (max-width: 600px) {
+  .email-h1 { font-size: 28px !important; line-height: 1.15 !important; letter-spacing: -0.3px !important; }
+  .email-h2 { font-size: 22px !important; line-height: 1.25 !important; letter-spacing: -0.2px !important; }
+  .email-h3 { font-size: 18px !important; line-height: 1.3 !important; }
+  .email-hero-sub { font-size: 15px !important; line-height: 1.45 !important; }
+  .email-coupon-code { font-size: 22px !important; letter-spacing: 2px !important; }
+  .email-product-title { font-size: 13px !important; line-height: 1.3 !important; }
+  .email-hero-pad { padding: 40px 24px !important; }
+  .email-hero-pad-tall { padding: 56px 24px !important; }
+}
+</style>`;
+}
+
 export function emailWrapper(
   content: string,
   theme: ColorTheme,
@@ -39,6 +62,7 @@ export function emailWrapper(
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="${font.googleFontsCssHref}" />
+  ${emailResponsiveStyles()}
 </head>
 <body style="margin:0;padding:0;background-color:${outerBg};font-family:${ff};-webkit-font-smoothing:antialiased;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${outerBg};font-family:${ff};">
@@ -162,7 +186,7 @@ function productCell(
     : `<div style="width:100%;height:140px;background-color:${theme.bgLight};border-radius:6px;"></div>`;
   return `<td width="48%" valign="top" style="vertical-align:top;font-family:${ff};">
     ${img}
-    <p style="margin:10px 0 4px;font-weight:${w.productName};color:${theme.text};font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
+    <p class="${EMAIL_PRODUCT_TITLE_CLASS}" style="margin:10px 0 4px;font-weight:${w.productName};color:${theme.text};font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
     <p style="margin:0 0 8px;color:${theme.textMuted};font-size:13px;line-height:1.5;font-family:${ff};">${esc(p.description)}</p>
     <a href="${esc(p.productUrl)}" target="_blank" style="color:${theme.accent};font-size:13px;font-weight:${w.productLink};text-decoration:none;font-family:${ff};">${esc(strings.shopNow)}</a>
   </td>`;

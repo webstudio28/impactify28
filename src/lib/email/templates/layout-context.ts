@@ -4,7 +4,7 @@ import type { EmailLayoutStyle } from "../layout-styles";
 import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { ProductItem } from "./types";
-import { esc, sectionDivider } from "./shared";
+import { esc, sectionDivider, EMAIL_PRODUCT_TITLE_CLASS } from "./shared";
 
 // ── Public context type ───────────────────────────────────────────────────────
 
@@ -51,12 +51,12 @@ export function makeLayoutCtx(
           return `<tr>
     <td background="${su}" bgcolor="${theme.primary}" style="background-color:${theme.primary};background-image:url('${su}');background-size:cover;background-position:center center;background-repeat:no-repeat;padding:0;">
       <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="width:100%;">
-        <tr><td style="background-color:rgba(0,0,0,0.55);padding:56px 40px;text-align:center;font-family:${ff};">${inner}</td></tr>
+        <tr><td class="email-hero-pad email-hero-pad-tall" style="background-color:rgba(0,0,0,0.55);padding:56px 40px;text-align:center;font-family:${ff};">${inner}</td></tr>
       </table>
     </td>
   </tr>`;
         }
-        return `<tr><td style="background-color:${theme.primary};padding:56px 40px;text-align:center;font-family:${ff};">${inner}</td></tr>`;
+        return `<tr><td class="email-hero-pad email-hero-pad-tall" style="background-color:${theme.primary};padding:56px 40px;text-align:center;font-family:${ff};">${inner}</td></tr>`;
       },
       accentStrip() { return ""; },
       offerRow(labelRaw, contentRaw) {
@@ -97,12 +97,12 @@ export function makeLayoutCtx(
     <td background="${su}" bgcolor="${theme.primary}" style="background-color:${theme.primary};background-image:url('${su}');background-size:cover;background-position:center;padding:0;">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr><td style="height:140px;font-size:0;line-height:0;">&nbsp;</td></tr>
-        <tr><td style="background-color:rgba(10,10,10,0.88);padding:36px 40px;text-align:left;font-family:${ff};">${inner}</td></tr>
+        <tr><td class="email-hero-pad" style="background-color:rgba(10,10,10,0.88);padding:36px 40px;text-align:left;font-family:${ff};">${inner}</td></tr>
       </table>
     </td>
   </tr>`;
         }
-        return `<tr><td style="background-color:${theme.primary};padding:56px 40px 36px;text-align:left;font-family:${ff};">${inner}</td></tr>`;
+        return `<tr><td class="email-hero-pad email-hero-pad-tall" style="background-color:${theme.primary};padding:56px 40px 36px;text-align:left;font-family:${ff};">${inner}</td></tr>`;
       },
       accentStrip() { return ""; },
       offerRow(labelRaw, contentRaw) {
@@ -148,12 +148,12 @@ export function makeLayoutCtx(
           return `<tr>
     <td background="${su}" bgcolor="#000000" style="background-color:#000000;background-image:url('${su}');background-size:cover;background-position:center;padding:0;">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr><td style="background-color:rgba(0,0,0,0.72);padding:72px 48px;text-align:center;font-family:${ff};">${inner}</td></tr>
+        <tr><td class="email-hero-pad email-hero-pad-tall" style="background-color:rgba(0,0,0,0.72);padding:72px 48px;text-align:center;font-family:${ff};">${inner}</td></tr>
       </table>
     </td>
   </tr>`;
         }
-        return `<tr><td bgcolor="#000000" style="background-color:#000000;padding:72px 48px;text-align:center;font-family:${ff};">${inner}</td></tr>`;
+        return `<tr><td class="email-hero-pad email-hero-pad-tall" bgcolor="#000000" style="background-color:#000000;padding:72px 48px;text-align:center;font-family:${ff};">${inner}</td></tr>`;
       },
       accentStrip() {
         return `<tr><td bgcolor="${theme.accent}" style="background-color:${theme.accent};height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>`;
@@ -197,7 +197,7 @@ export function makeLayoutCtx(
     <td style="padding:0;">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td width="58%" bgcolor="#1a1a1a" valign="middle" style="background-color:#1a1a1a;padding:48px 32px;vertical-align:middle;text-align:left;font-family:${ff};">
+          <td width="58%" bgcolor="#1a1a1a" valign="middle" class="email-hero-pad email-hero-pad-tall" style="background-color:#1a1a1a;padding:48px 32px;vertical-align:middle;text-align:left;font-family:${ff};">
             ${inner}
           </td>
           ${rightCell}
@@ -244,7 +244,7 @@ export function makeLayoutCtx(
       const imgRow = url
         ? `<tr><td style="padding:0;font-size:0;line-height:0;"><img src="${esc(url)}" alt="" width="600" style="display:block;width:100%;max-width:600px;border:0;" /></td></tr>`
         : `<tr><td bgcolor="#1a1a1a" style="background-color:#1a1a1a;height:280px;font-size:0;line-height:0;">&nbsp;</td></tr>`;
-      return `${imgRow}<tr><td bgcolor="${DARK_BG}" style="background-color:${DARK_BG};padding:40px 36px 36px;text-align:center;font-family:${ff};">${inner}</td></tr>`;
+      return `${imgRow}<tr><td class="email-hero-pad" bgcolor="${DARK_BG}" style="background-color:${DARK_BG};padding:40px 36px 36px;text-align:center;font-family:${ff};">${inner}</td></tr>`;
     },
     accentStrip() {
       return `<tr><td bgcolor="${theme.accent}" style="background-color:${theme.accent};height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>`;
@@ -338,7 +338,7 @@ function standardCell(p: ProductItem, theme: ColorTheme, font: EmailFontDefiniti
     : `<div style="width:100%;height:140px;background-color:${theme.bgLight};border-radius:6px;"></div>`;
   return `<td width="48%" valign="top" style="vertical-align:top;font-family:${ff};">
     ${img}
-    <p style="margin:10px 0 4px;font-weight:${w.productName};color:${theme.text};font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
+    <p class="${EMAIL_PRODUCT_TITLE_CLASS}" style="margin:10px 0 4px;font-weight:${w.productName};color:${theme.text};font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
     <p style="margin:0 0 8px;color:${theme.textMuted};font-size:13px;line-height:1.5;font-family:${ff};">${esc(p.description)}</p>
     <a href="${esc(p.productUrl)}" target="_blank" style="color:${theme.accent};font-size:13px;font-weight:${w.productLink};text-decoration:none;font-family:${ff};">${esc(strings.shopNow)}</a>
   </td>`;
@@ -364,7 +364,7 @@ function paperGrid(
     return `${divider}<tr>
       <td width="88" valign="top" style="vertical-align:top;padding-right:20px;">${img}</td>
       <td valign="middle" style="vertical-align:middle;font-family:${ff};">
-        <p style="margin:0 0 4px;font-weight:${w.productName};color:#1a1a1a;font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
+        <p class="${EMAIL_PRODUCT_TITLE_CLASS}" style="margin:0 0 4px;font-weight:${w.productName};color:#1a1a1a;font-size:14px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
         <p style="margin:0 0 10px;color:#5c5650;font-size:12px;line-height:1.6;font-family:${ff};">${esc(p.description)}</p>
         <a href="${esc(p.productUrl)}" target="_blank" style="font-size:10px;font-weight:${w.productLink};text-transform:uppercase;letter-spacing:1.5px;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #1a1a1a;padding-bottom:1px;font-family:${ff};">${esc(strings.shopNow)}</a>
       </td>
@@ -424,7 +424,7 @@ function darkCell(
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>
         <td style="padding:14px 16px 18px;font-family:${ff};">
-          <p style="margin:0 0 6px;font-weight:${w.productName};color:#ffffff;font-size:13px;line-height:1.3;text-transform:uppercase;letter-spacing:0.5px;font-family:${ff};">${esc(p.name)}</p>
+          <p class="${EMAIL_PRODUCT_TITLE_CLASS}" style="margin:0 0 6px;font-weight:${w.productName};color:#ffffff;font-size:13px;line-height:1.3;text-transform:uppercase;letter-spacing:0.5px;font-family:${ff};">${esc(p.name)}</p>
           <p style="margin:0 0 12px;color:#666666;font-size:12px;line-height:1.55;font-family:${ff};">${esc(p.description)}</p>
           <a href="${esc(p.productUrl)}" target="_blank" style="font-size:10px;font-weight:${w.productLink};text-transform:uppercase;letter-spacing:2px;color:${theme.accent};text-decoration:none;font-family:${ff};">${esc(strings.shopNow)} &#8594;</a>
         </td>
@@ -475,7 +475,7 @@ function splitCell(
     : `<div style="width:100%;height:160px;background-color:#f0ede8;"></div>`;
   return `<td width="30%" valign="top" style="vertical-align:top;font-family:${ff};">
     ${img}
-    <p style="margin:10px 0 4px;font-weight:${w.productName};color:#1a1a1a;font-size:12px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
+    <p class="${EMAIL_PRODUCT_TITLE_CLASS}" style="margin:10px 0 4px;font-weight:${w.productName};color:#1a1a1a;font-size:12px;line-height:1.3;font-family:${ff};">${esc(p.name)}</p>
     <p style="margin:0 0 8px;color:#888888;font-size:11px;line-height:1.5;font-family:${ff};">${esc(p.description)}</p>
     <a href="${esc(p.productUrl)}" target="_blank" style="font-size:10px;font-weight:${w.productLink};text-transform:uppercase;letter-spacing:1px;color:#1a1a1a;text-decoration:none;border-bottom:1px solid #1a1a1a;font-family:${ff};">${esc(strings.shopNow)}</a>
   </td>`;
@@ -530,7 +530,7 @@ function spotlightCell(
       <tr>
         <td style="padding:14px 16px 18px;font-family:${ff};">
           <p style="margin:0 0 6px;font-size:9px;color:#444444;font-family:${ff};">${numStr}</p>
-          <p style="margin:0 0 6px;font-weight:${w.productName};color:#ffffff;font-size:13px;line-height:1.3;text-transform:uppercase;letter-spacing:0.5px;font-family:${ff};">${esc(p.name)}</p>
+          <p class="${EMAIL_PRODUCT_TITLE_CLASS}" style="margin:0 0 6px;font-weight:${w.productName};color:#ffffff;font-size:13px;line-height:1.3;text-transform:uppercase;letter-spacing:0.5px;font-family:${ff};">${esc(p.name)}</p>
           <p style="margin:0 0 12px;color:#555555;font-size:11px;line-height:1.6;font-family:${ff};">${esc(p.description)}</p>
           <a href="${esc(p.productUrl)}" target="_blank" style="font-size:9px;font-weight:${w.productLink};text-transform:uppercase;letter-spacing:2.5px;color:${theme.accent};text-decoration:none;font-family:${ff};">${esc(strings.shopNow)} &#8594;</a>
         </td>

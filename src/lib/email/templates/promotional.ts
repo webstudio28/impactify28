@@ -5,7 +5,7 @@ import { makeLayoutCtx } from "./layout-context";
 import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { PromotionalData, RenderResult } from "./types";
-import { esc, emailWrapper, sectionDivider } from "./shared";
+import { esc, emailWrapper, sectionDivider, EMAIL_H1_CLASS, EMAIL_HERO_SUB_CLASS } from "./shared";
 
 export function renderPromotional(
   data: PromotionalData,
@@ -18,9 +18,9 @@ export function renderPromotional(
   const ctx = makeLayoutCtx(getLayoutStyle(layoutStyle), theme, font, w);
   const hasProducts = data.products.length > 0;
 
-  const heroInner = `<h1 style="margin:0;color:${ctx.heroTextColor};font-size:${ctx.heroFontSize}px;font-weight:${w.hero};line-height:1.15;letter-spacing:${ctx.heroLetterSpacing};text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(data.heroHeadline)}</h1>${
+  const heroInner = `<h1 class="${EMAIL_H1_CLASS}" style="margin:0;color:${ctx.heroTextColor};font-size:${ctx.heroFontSize}px;font-weight:${w.hero};line-height:1.15;letter-spacing:${ctx.heroLetterSpacing};text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(data.heroHeadline)}</h1>${
     data.supportingLine
-      ? `<p style="margin:16px 0 0;color:${ctx.heroSubColor};font-size:${ctx.heroSubFontSize}px;font-weight:${w.heroSub};line-height:1.5;text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(data.supportingLine)}</p>`
+      ? `<p class="${EMAIL_HERO_SUB_CLASS}" style="margin:16px 0 0;color:${ctx.heroSubColor};font-size:${ctx.heroSubFontSize}px;font-weight:${w.heroSub};line-height:1.5;text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(data.supportingLine)}</p>`
       : ""
   }<div style="margin-top:32px;text-align:${ctx.heroAlign};">${ctx.ctaButton(data.ctaText, data.ctaUrl, w.cta)}</div>`;
 

@@ -5,7 +5,7 @@ import { makeLayoutCtx } from "./layout-context";
 import type { EmailWeights } from "../typography-emphasis";
 import type { ColorTheme } from "../themes";
 import type { ProductLaunchData, RenderResult } from "./types";
-import { esc, emailWrapper, ctaButton, sectionDivider } from "./shared";
+import { esc, emailWrapper, sectionDivider, EMAIL_H1_CLASS, EMAIL_H2_CLASS, EMAIL_H3_CLASS } from "./shared";
 
 export function renderProductLaunch(
   data: ProductLaunchData,
@@ -29,7 +29,7 @@ export function renderProductLaunch(
       }
       <div style="background-color:${heroBandBg};padding:28px 40px;text-align:center;">
         <p style="margin:0;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);font-family:${ff};">${esc(s.newArrival)}</p>
-        <h1 style="margin:10px 0 0;color:#ffffff;font-size:${layoutStyle === "bold" ? "34" : "28"}px;font-weight:${w.hero};line-height:1.2;font-family:${ff};">${esc(data.productName)}</h1>
+        <h1 class="${EMAIL_H1_CLASS}" style="margin:10px 0 0;color:#ffffff;font-size:${layoutStyle === "dark" ? "34" : "28"}px;font-weight:${w.hero};line-height:1.2;font-family:${ff};">${esc(data.productName)}</h1>
       </div>
     </td>
   </tr>`;
@@ -38,7 +38,7 @@ export function renderProductLaunch(
 
   const headlineRow = `<tr>
     <td style="padding:40px 40px 20px;text-align:center;">
-      <h2 style="margin:0;font-size:${layoutStyle === "bold" ? "28" : "24"}px;font-weight:${w.headline};color:${theme.text};line-height:1.25;font-family:${ff};">${esc(data.launchHeadline)}</h2>
+      <h2 class="${EMAIL_H2_CLASS}" style="margin:0;font-size:${layoutStyle === "dark" ? "28" : "24"}px;font-weight:${w.headline};color:${theme.text};line-height:1.25;font-family:${ff};">${esc(data.launchHeadline)}</h2>
       <div style="margin-top:24px;">
         ${ctx.ctaButton(data.ctaText, data.ctaUrl, w.cta)}
       </div>
@@ -48,7 +48,7 @@ export function renderProductLaunch(
   const storyRow = data.story
     ? `${sectionDivider()}
   <tr>
-    <td style="padding:36px 40px;text-align:center;background-color:${layoutStyle === "minimal" ? "#ffffff" : layoutStyle === "bold" ? "#f5f5f5" : "#ffffff"};">
+    <td style="padding:36px 40px;text-align:center;background-color:${layoutStyle === "split" ? "#ffffff" : layoutStyle === "dark" ? "#111111" : "#ffffff"};">
       <p style="margin:0;font-size:16px;color:${theme.text};line-height:1.75;font-family:${ff};">${esc(data.story)}</p>
     </td>
   </tr>`
@@ -59,8 +59,8 @@ export function renderProductLaunch(
     validFeatures.length > 0
       ? `${sectionDivider()}
   <tr>
-    <td style="padding:36px ${layoutStyle === "editorial" ? "48" : "40"}px;">
-      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};${layoutStyle === "editorial" ? "border-left:4px solid " + theme.accent + ";padding-left:16px;" : ""}font-family:${ff};">${esc(s.keyFeatures)}</p>
+    <td style="padding:36px ${layoutStyle === "paper" ? "48" : "40"}px;">
+      <p style="margin:0 0 20px;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:1.5px;color:${theme.accent};${layoutStyle === "paper" ? "border-left:4px solid " + theme.accent + ";padding-left:16px;" : ""}font-family:${ff};">${esc(s.keyFeatures)}</p>
       ${validFeatures
         .map(
           (f) => `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px;">
@@ -98,7 +98,7 @@ export function renderProductLaunch(
   const finalCta = `${sectionDivider()}
   <tr>
     <td style="padding:40px;text-align:center;">
-      <h3 style="margin:0 0 20px;font-size:20px;font-weight:${w.subhead};color:${theme.text};font-family:${ff};">${esc(s.readyToExperience)}</h3>
+      <h3 class="${EMAIL_H3_CLASS}" style="margin:0 0 20px;font-size:20px;font-weight:${w.subhead};color:${theme.text};font-family:${ff};">${esc(s.readyToExperience)}</h3>
       ${ctx.ctaButton(data.ctaText, data.ctaUrl, w.cta)}
     </td>
   </tr>`;
