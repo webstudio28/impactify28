@@ -165,6 +165,16 @@ export default async function AdminCampaignDetailPage({
             {campaign.send_immediately && <span>Send immediately</span>}
           </div>
         </div>
+        {!isSms && (
+          <a
+            href={`/api/admin/campaigns/${id}/email-preview`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+          >
+            Preview email ↗
+          </a>
+        )}
       </div>
 
       {/* Audience */}

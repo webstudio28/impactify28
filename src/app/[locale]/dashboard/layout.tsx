@@ -2,11 +2,29 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
+import { DomainSetupGate } from "@/components/dashboard/DomainSetupGate";
+import { ProfileButton } from "@/components/dashboard/ProfileButton";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const t = await getTranslations("nav");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let hasSenderEmail = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("sender_display_name")
+      .eq("id", user.id)
+      .single();
+    hasSenderEmail = Boolean(profile?.sender_display_name?.trim());
+  }
 
   const nav = [
     { href: "/dashboard" as const, label: t("overview") },
@@ -36,8 +54,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="mt-4 border-t border-zinc-100 pt-4">
             <LocaleSwitcher />
           </div>
-          <div className="mt-1">
-            <SignOutButton />
+          <div className="mt-3 border-t border-zinc-100 pt-3">
+            <ProfileButton userEmail={user?.email ?? ""} />
           </div>
         </div>
       </aside>
@@ -51,7 +69,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <SignOutButton />
           </div>
         </header>
-        <div className="flex-1 bg-surface p-6 md:p-10">{children}</div>
+        <div className="flex-1 bg-surface p-6 md:p-10">
+          <DomainSetupGate hasSenderEmail={hasSenderEmail}>{children}</DomainSetupGate>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enqueueCampaignEmail, enqueueCampaignSms } from "@/lib/campaigns/queue";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
+import { createTicket } from "@/lib/tickets/create-ticket";
 
 /**
  * Enqueues outbound messages and sets campaign to `running`.
@@ -10,7 +11,7 @@ import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 export async function executeCampaignLaunch(
   supabase: SupabaseClient,
   campaignId: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; ticketed?: boolean }> {
   const { data: campaign, error: cErr } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
 
   if (cErr || !campaign) return { ok: false, error: "Campaign not found" };
@@ -36,6 +37,29 @@ export async function executeCampaignLaunch(
   if (channel === "sms") {
     if (audience.audience_type !== "phone") {
       return { ok: false, error: "SMS campaigns require a phone-number audience" };
+    }
+
+    // Validate SMS provider is configured before enqueueing
+    const smsProvider = process.env.SMS_PROVIDER?.toLowerCase().trim();
+    if (!smsProvider) {
+      await resetCampaignToReadyToLaunch(supabase, campaignId);
+      await createTicket({
+        kind: "critical",
+        title: "SMS campaign cannot launch — SMS_PROVIDER not configured",
+        message: "A campaign could not be launched because SMS_PROVIDER is not set on the server.",
+        userId: ownerId,
+        campaignId,
+        context: {
+          campaignId,
+          campaignName: campaign.name ?? "",
+          hint: "Set SMS_PROVIDER to one of: budgetsms, connectix, twilio, vonage",
+        },
+      });
+      return {
+        ok: false,
+        error: "SMS provider is not configured. The platform administrator has been notified.",
+        ticketed: true,
+      };
     }
 
     const { data: steps, error: sErr } = await supabase
@@ -79,8 +103,64 @@ export async function executeCampaignLaunch(
       return { ok: false, error: e instanceof Error ? e.message : "Enqueue failed" };
     }
   } else {
+    // ── Email channel ──────────────────────────────────────────────────────────
+
     if (audience.audience_type !== "email") {
       return { ok: false, error: "Email campaigns require an email audience" };
+    }
+
+    if (!process.env.RESEND_API_KEY?.trim()) {
+      await resetCampaignToReadyToLaunch(supabase, campaignId);
+      await createTicket({
+        kind: "error",
+        title: "Email campaign cannot launch — RESEND_API_KEY missing",
+        message: "A campaign could not be sent because RESEND_API_KEY is not configured on the server.",
+        userId: ownerId,
+        campaignId,
+        context: { campaignId, campaignName: campaign.name ?? "" },
+      });
+      return {
+        ok: false,
+        error: "RESEND_API_KEY is not set. The platform administrator has been notified.",
+        ticketed: true,
+      };
+    }
+
+    const platformFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
+    if (!platformFrom) {
+      await resetCampaignToReadyToLaunch(supabase, campaignId);
+      await createTicket({
+        kind: "error",
+        title: "Email campaign cannot launch — RESEND_FROM_EMAIL missing",
+        message: "A campaign could not be sent because RESEND_FROM_EMAIL is not configured on the server.",
+        userId: ownerId,
+        campaignId,
+        context: { campaignId, campaignName: campaign.name ?? "" },
+      });
+      return {
+        ok: false,
+        error: "Platform sender email is not configured. The platform administrator has been notified.",
+        ticketed: true,
+      };
+    }
+
+    const { data: senderProfile } = await supabase
+      .from("profiles")
+      .select("sender_display_name, business_name")
+      .eq("id", ownerId)
+      .single();
+
+    const displayName =
+      (senderProfile?.sender_display_name as string | null)?.trim() ||
+      (senderProfile?.business_name as string | null)?.trim() ||
+      null;
+
+    if (!displayName) {
+      await resetCampaignToReadyToLaunch(supabase, campaignId);
+      return {
+        ok: false,
+        error: "Set your business display name in Profile → Settings before launching an email campaign.",
+      };
     }
 
     const subject = typeof campaign.email_subject === "string" ? campaign.email_subject.trim() : "";
@@ -148,4 +228,14 @@ export async function executeCampaignLaunch(
   if (upErr) return { ok: false, error: upErr.message };
 
   return { ok: true };
+}
+
+async function resetCampaignToReadyToLaunch(
+  supabase: SupabaseClient,
+  campaignId: string
+): Promise<void> {
+  await supabase
+    .from("campaigns")
+    .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
+    .eq("id", campaignId);
 }

@@ -107,6 +107,21 @@ export function ModerationQueueClient({
                       >
                         {t("view")}
                       </Link>
+                      {row.channel === "email" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.open(
+                              `/api/admin/campaigns/${row.id}/email-preview`,
+                              "_blank",
+                              "noopener,noreferrer"
+                            )
+                          }
+                          className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
+                        >
+                          {t("previewEmail")}
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={busyId !== null}

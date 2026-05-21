@@ -15,10 +15,15 @@ export type CampaignRow = {
 
 type OutboundMsg = {
   id: string;
-  to_phone: string;
+  // SMS fields
+  to_phone: string | null;
+  step_order: number | null;
+  body: string | null;
+  // Email fields
+  to_email: string | null;
+  subject: string | null;
+  // Common
   status: string;
-  step_order: number;
-  body: string;
   error_message: string | null;
   provider_message_id: string | null;
   run_at: string;
@@ -27,6 +32,7 @@ type OutboundMsg = {
 };
 
 type MonitorPayload = {
+  channel: string;
   campaign: { id: string; name: string; status: string };
   counts: { pending: number; sent: number; failed: number };
   total: number;
@@ -169,15 +175,29 @@ export function CampaignsTable({
     setStartBusyId(id);
     try {
       const res = await fetch(`/api/campaigns/${id}/start`, { method: "POST" });
-      const j = (await res.json()) as { error?: string };
+      const j = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        ticketed?: boolean;
+        email?: { processed: number; errors: number };
+      };
       if (!res.ok) {
         alert(j.error ?? t("startError"));
+        router.refresh();
         return;
       }
-      try {
-        await fetch("/api/sms/process", { method: "POST" });
-      } catch {
-        /* optional dev */
+      if (j.email) {
+        if (j.email.errors > 0) {
+          alert(t("startPartialSend", { sent: j.email.processed }));
+        } else if (j.email.processed === 0) {
+          alert(t("startNoEmailsSent"));
+        }
+      } else {
+        try {
+          await fetch("/api/sms/process", { method: "POST" });
+        } catch {
+          /* optional */
+        }
       }
       router.refresh();
     } finally {
@@ -426,7 +446,6 @@ function MonitorModal({
   const [data, setData] = useState<MonitorPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "sent" | "failed">("all");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const userPagedRef = useRef(false);
   /** Avoid resetting panel when parent re-renders (e.g. table refresh): only reload on campaign/filter. */
   const filterRef = useRef(filter);
@@ -504,13 +523,14 @@ function MonitorModal({
     };
   }, [campaignId, filter, isLivePolling, applyPayloadRowMerge]);
 
+  const isEmail = data?.channel === "email";
   const titleLive = Boolean(
     data &&
       (data.campaign.status === "running" ||
         data.campaign.status === "paused" ||
         data.campaign.status === "queued")
   );
-  const modalTitle = titleLive ? tm("titleLive") : tm("titleDone");
+  const modalTitle = titleLive ? tm("titleLive") : (isEmail ? tm("titleDoneEmail") : tm("titleDone"));
 
   async function loadMore() {
     if (!data) return;
@@ -577,7 +597,7 @@ function MonitorModal({
           ) : (
             !error && <p className="text-xs text-ink-muted">{tm("loading")}</p>
           )}
-          <p className="text-[11px] text-ink-muted">{tm("rateNote")}</p>
+          {!isEmail && <p className="text-[11px] text-ink-muted">{tm("rateNote")}</p>}
           <div className="flex flex-wrap gap-1.5">
             {(["all", "pending", "sent", "failed"] as const).map((f) => (
               <button
@@ -611,8 +631,7 @@ function MonitorModal({
               key={row.id}
               row={row}
               formattedTime={formatAppDate(row.updated_at, locale, "datetime")}
-              expanded={expandedId === row.id}
-              onToggle={() => setExpandedId((id) => (id === row.id ? null : row.id))}
+              isEmail={isEmail}
             />
           ))}
         </div>
@@ -649,13 +668,11 @@ function MonitorModal({
 const OutboundRow = memo(function OutboundRow({
   row,
   formattedTime,
-  expanded,
-  onToggle,
+  isEmail,
 }: {
   row: OutboundMsg;
   formattedTime: string;
-  expanded: boolean;
-  onToggle: () => void;
+  isEmail: boolean;
 }) {
   const tm = useTranslations("campaigns.monitor");
   const color =
@@ -665,37 +682,30 @@ const OutboundRow = memo(function OutboundRow({
         ? "border-red-200 bg-red-50/60"
         : "border-amber-200 bg-amber-50/60";
 
+  const recipient = isEmail ? row.to_email : row.to_phone;
+  const preview = isEmail ? row.subject : row.body;
+
   return (
     <div className={`mb-2 rounded-lg border px-3 py-2 text-xs transition-colors ${color}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
-      >
+      <div className="flex w-full flex-wrap items-center justify-between gap-2">
         <span className="font-semibold capitalize text-ink">{row.status}</span>
-        <span className="font-mono text-[11px] text-ink">{row.to_phone}</span>
+        <span className="font-mono text-[11px] text-ink">{recipient}</span>
         <span className="text-[11px] text-ink-muted">
-          {tm("step")} {row.step_order} · {formattedTime}
+          {!isEmail && row.step_order != null ? `${tm("step")} ${row.step_order} · ` : ""}
+          {formattedTime}
         </span>
-      </button>
+      </div>
+      {preview ? (
+        <p className="mt-1 line-clamp-2 break-words text-[11px] text-ink">{preview}</p>
+      ) : null}
       {row.provider_message_id ? (
         <p className="mt-1 truncate font-mono text-[10px] text-ink-muted" title={row.provider_message_id}>
           {tm("provider")}: {row.provider_message_id}
         </p>
       ) : null}
-      {row.error_message ? <p className="mt-1 text-[11px] font-medium text-red-800">{row.error_message}</p> : null}
-      {!expanded ? (
-        <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-[11px] text-ink">{row.body}</p>
-      ) : (
-        <p className="mt-2 whitespace-pre-wrap break-words text-[11px] text-ink">{row.body}</p>
-      )}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="mt-1 text-[11px] font-medium text-accent hover:text-accent-hover"
-      >
-        {expanded ? tm("collapse") : tm("expand")}
-      </button>
+      {row.error_message ? (
+        <p className="mt-1 text-[11px] font-medium text-red-800">{row.error_message}</p>
+      ) : null}
     </div>
   );
 });

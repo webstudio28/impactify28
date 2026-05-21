@@ -1,17 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { formatResendFrom } from "@/lib/email/resend-from";
+import type { CampaignSendSummary } from "@/lib/tickets/create-ticket";
 
 const nowIso = () => new Date().toISOString();
+
+type ResendSendResult =
+  | { ok: true; id: string | null }
+  | { ok: false; error: string; statusCode?: number };
 
 async function sendWithResend(
   to: string,
   subject: string,
   html: string,
-  from: string
-): Promise<{ ok: true; id: string | null } | { ok: false; error: string }> {
+  from: string,
+  replyTo?: string
+): Promise<ResendSendResult> {
   const key = process.env.RESEND_API_KEY?.trim();
-  if (!key) return { ok: false, error: "RESEND_API_KEY is not set" };
-  if (!from) return { ok: false, error: "Sender address is not configured" };
+  if (!key) return { ok: false, error: "RESEND_API_KEY is not set", statusCode: 0 };
+  if (!from) return { ok: false, error: "Sender address is not configured", statusCode: 0 };
+
+  const body: Record<string, unknown> = { from, to: [to], subject, html };
+  if (replyTo) body.reply_to = [replyTo];
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -19,19 +27,19 @@ async function sendWithResend(
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+    body: JSON.stringify(body),
   });
 
   const text = await res.text();
   if (!res.ok) {
-    let msg = text.slice(0, 300);
+    let msg = text.slice(0, 400);
     try {
-      const j = JSON.parse(text) as { message?: string };
-      if (j.message) msg = j.message;
+      const j = JSON.parse(text) as { message?: string; name?: string };
+      if (j.message) msg = j.name ? `${j.name}: ${j.message}` : j.message;
     } catch {
       /* */
     }
-    return { ok: false, error: msg };
+    return { ok: false, error: msg, statusCode: res.status };
   }
 
   let id: string | null = null;
@@ -44,25 +52,38 @@ async function sendWithResend(
   return { ok: true, id };
 }
 
+export type EmailProcessResult = {
+  processed: number;
+  errors: string[];
+  campaignIds: string[];
+  /** Per-campaign summaries — used by cron/routes to create tickets */
+  campaignSummaries: CampaignSendSummary[];
+};
+
 /**
  * Sends due outbound_email for running campaigns (same pattern as SMS queue).
+ * Returns per-campaign summaries so callers can create appropriate tickets.
  */
 export async function processDueOutboundEmail(
   supabase: SupabaseClient,
   options?: { limit?: number }
-): Promise<{ processed: number; errors: string[]; campaignIds: string[] }> {
+): Promise<EmailProcessResult> {
   const limit = options?.limit ?? 40;
   const ts = nowIso();
 
   const { data: running, error: rErr } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, name, user_id")
     .in("status", ["running", "paused"]);
   if (rErr) throw rErr;
-  const runningIds = (running ?? []).map((r) => r.id).filter(Boolean);
-  if (!runningIds.length) {
-    return { processed: 0, errors: [], campaignIds: [] };
+  if (!running?.length) {
+    return { processed: 0, errors: [], campaignIds: [], campaignSummaries: [] };
   }
+
+  const runningIds = running.map((r) => r.id as string).filter(Boolean);
+  const campaignMeta = new Map(
+    running.map((r) => [r.id as string, { name: r.name as string | null, userId: r.user_id as string | null }])
+  );
 
   const { data: batch, error } = await supabase
     .from("outbound_email")
@@ -74,7 +95,9 @@ export async function processDueOutboundEmail(
     .limit(limit);
 
   if (error) throw error;
-  if (!batch?.length) return { processed: 0, errors: [], campaignIds: [] };
+  if (!batch?.length) {
+    return { processed: 0, errors: [], campaignIds: [], campaignSummaries: [] };
+  }
 
   const userIds = Array.from(
     new Set(batch.map((r) => r.user_id as string).filter((id): id is string => typeof id === "string" && id.length > 0))
@@ -82,35 +105,52 @@ export async function processDueOutboundEmail(
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, sender_email, sender_display_name")
+    .select("id, sender_email, sender_display_name, business_name")
     .in("id", userIds);
 
-  const profileByUser = new Map(
-    (profiles ?? []).map((p) => [
-      p.id as string,
-      formatResendFrom(p.sender_email as string | null, p.sender_display_name as string | null),
-    ])
-  );
+  // Platform sending domain — all emails go out from this address.
+  // The user's display name is shown in the inbox; their sender_email becomes Reply-To.
+  const platformFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
 
-  const envFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
+  type ProfileRow = { replyTo: string | null; fromHeader: string | null };
+  const profileByUser = new Map<string, ProfileRow>(
+    (profiles ?? []).map((p) => {
+      const displayName = (p.sender_display_name as string | null)?.trim()
+        || (p.business_name as string | null)?.trim()
+        || null;
+      const fromHeader = platformFrom
+        ? displayName ? `${displayName} <${platformFrom}>` : platformFrom
+        : null;
+      const replyTo = (p.sender_email as string | null)?.trim() || null;
+      return [p.id as string, { fromHeader, replyTo }];
+    })
+  );
 
   const errors: string[] = [];
   let processed = 0;
 
+  // Per-campaign outcome tracking
+  const perCampaign = new Map<string, { sent: number; failed: number; errors: string[] }>();
+  function campaignTrack(id: string) {
+    if (!perCampaign.has(id)) perCampaign.set(id, { sent: 0, failed: 0, errors: [] });
+    return perCampaign.get(id)!;
+  }
+
   for (const row of batch) {
     const uid = row.user_id as string;
-    const fromHeader = profileByUser.get(uid) || envFrom;
+    const campaignId = row.campaign_id as string;
+    const profile = profileByUser.get(uid);
+    const fromHeader = profile?.fromHeader ?? null;
+    const replyTo = profile?.replyTo ?? undefined;
+
     if (!fromHeader) {
-      const msg =
-        "Set your business sender email in the campaign wizard (or configure RESEND_FROM_EMAIL for the whole app).";
+      const msg = "RESEND_FROM_EMAIL is not configured on the server. Contact the platform administrator.";
       errors.push(`${row.id}: ${msg}`);
+      campaignTrack(campaignId).failed++;
+      campaignTrack(campaignId).errors.push(`${row.to_email}: Sender not configured`);
       await supabase
         .from("outbound_email")
-        .update({
-          status: "failed",
-          error_message: msg,
-          updated_at: nowIso(),
-        })
+        .update({ status: "failed", error_message: msg, updated_at: nowIso() })
         .eq("id", row.id);
       continue;
     }
@@ -119,17 +159,17 @@ export async function processDueOutboundEmail(
       row.to_email as string,
       row.subject as string,
       row.html_body as string,
-      fromHeader
+      fromHeader,
+      replyTo
     );
+
     if (!result.ok) {
       errors.push(`${row.id}: ${result.error}`);
+      campaignTrack(campaignId).failed++;
+      campaignTrack(campaignId).errors.push(`${row.to_email}: ${result.error}`);
       await supabase
         .from("outbound_email")
-        .update({
-          status: "failed",
-          error_message: result.error,
-          updated_at: nowIso(),
-        })
+        .update({ status: "failed", error_message: result.error, updated_at: nowIso() })
         .eq("id", row.id);
       continue;
     }
@@ -143,16 +183,35 @@ export async function processDueOutboundEmail(
         updated_at: nowIso(),
       })
       .eq("id", row.id);
+
     if (upErr) {
       errors.push(`${row.id}: ${upErr.message}`);
+      campaignTrack(campaignId).failed++;
+      campaignTrack(campaignId).errors.push(`${row.to_email}: DB update failed — ${upErr.message}`);
       continue;
     }
+
     processed++;
+    campaignTrack(campaignId).sent++;
   }
 
   const campaignIds = Array.from(
     new Set(batch.map((r) => r.campaign_id).filter((id): id is string => typeof id === "string" && id.length > 0))
   );
 
-  return { processed, errors, campaignIds };
+  const campaignSummaries: CampaignSendSummary[] = Array.from(perCampaign.entries())
+    .filter(([, v]) => v.failed > 0)
+    .map(([campaignId, v]) => {
+      const meta = campaignMeta.get(campaignId);
+      return {
+        campaignId,
+        campaignName: meta?.name ?? undefined,
+        userId: meta?.userId ?? null,
+        sent: v.sent,
+        failed: v.failed,
+        sampleErrors: v.errors.slice(0, 5),
+      };
+    });
+
+  return { processed, errors, campaignIds, campaignSummaries };
 }

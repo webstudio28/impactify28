@@ -23,10 +23,12 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const table = campaign.channel === "email" ? "outbound_email" : "outbound_sms";
+
   const [{ count: sent }, { count: failed }, { count: pending }] = await Promise.all([
-    supabase.from("outbound_sms").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "sent"),
-    supabase.from("outbound_sms").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "failed"),
-    supabase.from("outbound_sms").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "pending"),
+    supabase.from(table).select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "sent"),
+    supabase.from(table).select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "failed"),
+    supabase.from(table).select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "pending"),
   ]);
 
   const total = (sent ?? 0) + (failed ?? 0) + (pending ?? 0);

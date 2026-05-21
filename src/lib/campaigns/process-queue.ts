@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendSms } from "@/lib/sms";
+import type { CampaignSendSummary } from "@/lib/tickets/create-ticket";
 
 const smsOptions = () => ({
   senderId: process.env.SMS_SENDER_ID || undefined,
@@ -47,26 +48,54 @@ async function rollbackRateSlot(supabase: SupabaseClient, campaignId: string, re
   if (error) console.warn("[sms] campaign_rate_rollback:", error.message);
 }
 
+export type SmsProcessResult = {
+  processed: number;
+  errors: string[];
+  campaignIds: string[];
+  skippedRateLimit: number;
+  /** Per-campaign summaries — used by cron/routes to create tickets */
+  campaignSummaries: CampaignSendSummary[];
+  /** Set when the SMS provider is not configured — caller should create a critical ticket */
+  providerError: string | null;
+};
+
 /**
  * Sends due outbound SMS for campaigns in `running` status (paused campaigns are skipped).
- * Max 50 SMS per UTC minute per campaign via DB RPC (after migration).
+ * Returns per-campaign summaries so callers can create appropriate tickets.
  */
 export async function processDueOutboundSms(
   supabase: SupabaseClient,
   options?: { limit?: number }
-): Promise<{ processed: number; errors: string[]; campaignIds: string[]; skippedRateLimit: number }> {
+): Promise<SmsProcessResult> {
   const limit = options?.limit ?? 80;
   const ts = nowIso();
 
+  // Provider config check — fail fast before any DB work
+  const smsProvider = process.env.SMS_PROVIDER?.toLowerCase().trim();
+  if (!smsProvider) {
+    return {
+      processed: 0,
+      errors: ["SMS_PROVIDER is not set"],
+      campaignIds: [],
+      skippedRateLimit: 0,
+      campaignSummaries: [],
+      providerError: "SMS_PROVIDER environment variable is not set. Supported: budgetsms, connectix, twilio, vonage.",
+    };
+  }
+
   const { data: running, error: rErr } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id, name, user_id")
     .in("status", ["running", "queued"]);
   if (rErr) throw rErr;
-  const runningIds = (running ?? []).map((r) => r.id).filter(Boolean);
-  if (!runningIds.length) {
-    return { processed: 0, errors: [], campaignIds: [], skippedRateLimit: 0 };
+  if (!running?.length) {
+    return { processed: 0, errors: [], campaignIds: [], skippedRateLimit: 0, campaignSummaries: [], providerError: null };
   }
+
+  const runningIds = running.map((r) => r.id as string).filter(Boolean);
+  const campaignMeta = new Map(
+    running.map((r) => [r.id as string, { name: r.name as string | null, userId: r.user_id as string | null }])
+  );
 
   const { data: batch, error } = await supabase
     .from("outbound_sms")
@@ -78,12 +107,21 @@ export async function processDueOutboundSms(
     .limit(limit);
 
   if (error) throw error;
-  if (!batch?.length) return { processed: 0, errors: [], campaignIds: [], skippedRateLimit: 0 };
+  if (!batch?.length) {
+    return { processed: 0, errors: [], campaignIds: [], skippedRateLimit: 0, campaignSummaries: [], providerError: null };
+  }
 
   const errors: string[] = [];
   let processed = 0;
   let skippedRateLimit = 0;
   const opts = smsOptions();
+
+  // Track per-campaign outcomes
+  const perCampaign = new Map<string, { sent: number; failed: number; errors: string[] }>();
+  function campaignTrack(id: string) {
+    if (!perCampaign.has(id)) perCampaign.set(id, { sent: 0, failed: 0, errors: [] });
+    return perCampaign.get(id)!;
+  }
 
   for (const row of batch) {
     const campaignId = row.campaign_id as string | null;
@@ -101,6 +139,8 @@ export async function processDueOutboundSms(
       if (!result.ok) {
         const msg = failureReason(result.data, result.status);
         errors.push(`${row.id}: ${msg}`);
+        campaignTrack(campaignId).failed++;
+        campaignTrack(campaignId).errors.push(`${row.to_phone}: ${msg}`);
         await rollbackRateSlot(supabase, campaignId, reserved);
         reserved = false;
         await supabase
@@ -127,9 +167,12 @@ export async function processDueOutboundSms(
         .eq("id", row.id);
       if (upErr) throw upErr;
       processed++;
+      campaignTrack(campaignId).sent++;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`${row.id}: ${msg}`);
+      campaignTrack(campaignId).failed++;
+      campaignTrack(campaignId).errors.push(`${row.to_phone ?? row.id}: ${msg}`);
       await rollbackRateSlot(supabase, campaignId, reserved);
       reserved = false;
       await supabase
@@ -143,5 +186,19 @@ export async function processDueOutboundSms(
     new Set(batch.map((r) => r.campaign_id).filter((id): id is string => typeof id === "string" && id.length > 0))
   );
 
-  return { processed, errors, campaignIds, skippedRateLimit };
+  const campaignSummaries: CampaignSendSummary[] = Array.from(perCampaign.entries())
+    .filter(([, v]) => v.failed > 0)
+    .map(([campaignId, v]) => {
+      const meta = campaignMeta.get(campaignId);
+      return {
+        campaignId,
+        campaignName: meta?.name ?? undefined,
+        userId: meta?.userId ?? null,
+        sent: v.sent,
+        failed: v.failed,
+        sampleErrors: v.errors.slice(0, 5),
+      };
+    });
+
+  return { processed, errors, campaignIds, skippedRateLimit, campaignSummaries, providerError: null };
 }

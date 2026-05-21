@@ -145,7 +145,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     if (typeof body.email_layout_style === "string" && body.email_layout_style.trim()) {
       const lk = body.email_layout_style.trim();
-      if (lk === "standard" || lk === "editorial" || lk === "minimal" || lk === "bold" || lk === "spotlight") {
+      if (lk === "standard" || lk === "paper" || lk === "dark" || lk === "split" || lk === "spotlight") {
         payload.email_layout_style = lk;
       }
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { domainFromEmail, registerResendDomain } from "@/lib/resend/domains";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,7 +13,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, business_name, logo_url, sender_email, sender_display_name")
+    .select(
+      "id, business_name, logo_url, sender_email, sender_display_name, resend_domain_id, resend_domain_status, resend_domain_records"
+    )
     .eq("id", user.id)
     .single();
 
@@ -27,7 +30,7 @@ export async function PATCH(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { sender_email?: unknown; sender_display_name?: unknown };
+  let body: { sender_email?: unknown; sender_display_name?: unknown; business_name?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -36,6 +39,18 @@ export async function PATCH(req: Request) {
 
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   let touched = false;
+
+  if ("business_name" in body) {
+    touched = true;
+    if (body.business_name === null || body.business_name === "") {
+      payload.business_name = null;
+    } else if (typeof body.business_name === "string") {
+      const n = body.business_name.replace(/[\r\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+      payload.business_name = n || null;
+    } else {
+      return NextResponse.json({ error: "Invalid business_name" }, { status: 400 });
+    }
+  }
 
   if ("sender_email" in body) {
     touched = true;
@@ -66,6 +81,20 @@ export async function PATCH(req: Request) {
 
   if (!touched) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
+  // Auto-register the sender domain in Resend when the email changes.
+  if (typeof payload.sender_email === "string") {
+    const domain = domainFromEmail(payload.sender_email);
+    if (domain) {
+      const result = await registerResendDomain(domain);
+      if (result.ok) {
+        payload.resend_domain_id = result.domain.id;
+        payload.resend_domain_status = result.domain.status;
+        payload.resend_domain_records = result.domain.records;
+      }
+      // Non-fatal: if Resend registration fails we still save the email.
+    }
   }
 
   const { data, error } = await supabase.from("profiles").update(payload).eq("id", user.id).select("*").single();
