@@ -178,26 +178,13 @@ export function CampaignsTable({
       const j = (await res.json()) as {
         ok?: boolean;
         error?: string;
-        ticketed?: boolean;
-        email?: { processed: number; errors: number };
+        message?: string;
+        background?: boolean;
       };
       if (!res.ok) {
         alert(j.error ?? t("startError"));
         router.refresh();
         return;
-      }
-      if (j.email) {
-        if (j.email.errors > 0) {
-          alert(t("startPartialSend", { sent: j.email.processed }));
-        } else if (j.email.processed === 0) {
-          alert(t("startNoEmailsSent"));
-        }
-      } else {
-        try {
-          await fetch("/api/sms/process", { method: "POST" });
-        } catch {
-          /* optional */
-        }
       }
       router.refresh();
     } finally {

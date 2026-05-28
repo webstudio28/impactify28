@@ -172,6 +172,7 @@
     "editCampaign": "Edit",
     "startCampaign": "Start campaign",
     "startingCampaign": "Starting…",
+    "startQueued": "Campaign started. Sending runs in the background — open Monitor for live progress.",
     "startError": "Could not start campaign",
     "startPartialSend": "Campaign started. Sent {sent} email(s); some messages failed:",
     "startNoEmailsSent": "Campaign started but no emails were sent. Open live results to see errors, or check RESEND_API_KEY and your sender address.",

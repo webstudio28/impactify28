@@ -33,7 +33,7 @@ export default async function AdminTicketsPage({
             ) : null}
           </div>
           <p className="mt-1 text-sm text-zinc-500">
-            Platform errors reported by the system. Resolve them once you've fixed the underlying issue.
+            Platform errors reported by the system. Resolve them once you have fixed the underlying issue.
           </p>
         </div>
       </div>

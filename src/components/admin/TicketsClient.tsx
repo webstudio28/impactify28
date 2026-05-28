@@ -405,8 +405,15 @@ function TicketCard({
 
             {ticket.profiles?.sender_email ? (
               <span>
-                Sender:{" "}
+                Reply-to:{" "}
                 <span className="font-mono text-zinc-400">{ticket.profiles.sender_email}</span>
+              </span>
+            ) : null}
+
+            {typeof ticket.context?.platformFromEmail === "string" ? (
+              <span>
+                Platform From:{" "}
+                <span className="font-mono text-amber-300">{String(ticket.context.platformFromEmail)}</span>
               </span>
             ) : null}
 

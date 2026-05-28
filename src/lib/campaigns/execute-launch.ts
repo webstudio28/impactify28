@@ -1,21 +1,70 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enqueueCampaignEmail, enqueueCampaignSms } from "@/lib/campaigns/queue";
+import { getInvalidPlatformFromWarning } from "@/lib/email/resend-errors";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 import { createTicket } from "@/lib/tickets/create-ticket";
+
+const AUDIENCE_PAGE_SIZE = 1000;
+
+/** Load all audience member emails/phones (Supabase returns max ~1000 rows per request). */
+async function fetchAudienceValues(
+  supabase: SupabaseClient,
+  audienceId: string,
+  memberIds?: string[]
+): Promise<{ values: string[]; error?: string }> {
+  const values: string[] = [];
+  let offset = 0;
+
+  while (true) {
+    let q = supabase
+      .from("audience_members")
+      .select("value")
+      .eq("audience_id", audienceId)
+      .order("id", { ascending: true })
+      .range(offset, offset + AUDIENCE_PAGE_SIZE - 1);
+
+    if (memberIds?.length) {
+      q = q.in("id", memberIds);
+    }
+
+    const { data, error } = await q;
+    if (error) return { values: [], error: error.message };
+    if (!data?.length) break;
+
+    for (const row of data) {
+      const v = (row.value as string).trim();
+      if (v) values.push(v);
+    }
+    if (data.length < AUDIENCE_PAGE_SIZE) break;
+    offset += AUDIENCE_PAGE_SIZE;
+  }
+
+  return { values };
+}
+
+export type ExecuteCampaignLaunchOptions = {
+  /** When the HTTP handler already set status to `running` before background enqueue. */
+  skipReadyCheck?: boolean;
+  /** Skip the final `running` update (status already set). */
+  skipStatusUpdate?: boolean;
+};
 
 /**
  * Enqueues outbound messages and sets campaign to `running`.
  * Used after admin approval (`ready_to_launch`) or trusted server paths.
- * Caller must ensure the campaign is in `ready_to_launch` (or otherwise safe to launch).
  */
 export async function executeCampaignLaunch(
   supabase: SupabaseClient,
-  campaignId: string
-): Promise<{ ok: true } | { ok: false; error: string; ticketed?: boolean }> {
+  campaignId: string,
+  options?: ExecuteCampaignLaunchOptions
+): Promise<{ ok: true; queued?: number } | { ok: false; error: string; ticketed?: boolean }> {
   const { data: campaign, error: cErr } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
 
   if (cErr || !campaign) return { ok: false, error: "Campaign not found" };
-  if (campaign.status !== "ready_to_launch") {
+  const allowedStatus = options?.skipReadyCheck
+    ? ["ready_to_launch", "running"]
+    : ["ready_to_launch"];
+  if (!allowedStatus.includes(campaign.status as string)) {
     return { ok: false, error: "Campaign is not approved for launch" };
   }
   if (!campaign.audience_id) {
@@ -71,13 +120,8 @@ export async function executeCampaignLaunch(
     if (sErr) return { ok: false, error: sErr.message };
     if (!steps?.length) return { ok: false, error: "Add at least one SMS step" };
 
-    const { data: members, error: mErr } = await supabase
-      .from("audience_members")
-      .select("value")
-      .eq("audience_id", campaign.audience_id);
-
-    if (mErr) return { ok: false, error: mErr.message };
-    const phones = (members ?? []).map((m) => m.value.trim()).filter(Boolean);
+    const { values: phones, error: mErr } = await fetchAudienceValues(supabase, campaign.audience_id as string);
+    if (mErr) return { ok: false, error: mErr };
     if (!phones.length) return { ok: false, error: "Audience has no phone numbers" };
 
     const { error: delErr } = await supabase
@@ -127,19 +171,24 @@ export async function executeCampaignLaunch(
     }
 
     const platformFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
-    if (!platformFrom) {
+    const platformFromProblem = getInvalidPlatformFromWarning(platformFrom);
+    if (platformFromProblem) {
       await resetCampaignToReadyToLaunch(supabase, campaignId);
       await createTicket({
-        kind: "error",
-        title: "Email campaign cannot launch — RESEND_FROM_EMAIL missing",
-        message: "A campaign could not be sent because RESEND_FROM_EMAIL is not configured on the server.",
+        kind: "critical",
+        title: `Invalid platform sender (RESEND_FROM_EMAIL) — ${campaign.name ?? campaignId}`,
+        message: platformFromProblem,
         userId: ownerId,
         campaignId,
-        context: { campaignId, campaignName: campaign.name ?? "" },
+        context: {
+          campaignName: campaign.name ?? "",
+          platformFromEmail: platformFrom ?? "(not set)",
+          fixHint: "Use hello@impactify28.com (or similar) on a domain verified in Resend — not @gmail.com.",
+        },
       });
       return {
         ok: false,
-        error: "Platform sender email is not configured. The platform administrator has been notified.",
+        error: platformFromProblem,
         ticketed: true,
       };
     }
@@ -177,17 +226,24 @@ export async function executeCampaignLaunch(
       ? (campaign.email_selected_member_ids as string[])
       : [];
 
-    let memberQuery = supabase.from("audience_members").select("value").eq("audience_id", campaign.audience_id);
-    if (!includeAll) {
-      if (!selectedIds.length) {
-        return { ok: false, error: "Select at least one recipient" };
-      }
-      memberQuery = memberQuery.in("id", selectedIds);
+    if (!includeAll && !selectedIds.length) {
+      return { ok: false, error: "Select at least one recipient" };
     }
 
-    const { data: members, error: mErr } = await memberQuery;
-    if (mErr) return { ok: false, error: mErr.message };
-    const emails = (members ?? []).map((m) => m.value.trim()).filter(Boolean);
+    const { values: allEmails, error: mErr } = await fetchAudienceValues(
+      supabase,
+      campaign.audience_id as string,
+      includeAll ? undefined : selectedIds
+    );
+    if (mErr) return { ok: false, error: mErr };
+
+    const maxRaw = process.env.EMAIL_LAUNCH_MAX_RECIPIENTS?.trim();
+    const maxRecipients = maxRaw ? Number.parseInt(maxRaw, 10) : 0;
+    const emails =
+      Number.isFinite(maxRecipients) && maxRecipients > 0
+        ? allEmails.slice(0, maxRecipients)
+        : allEmails;
+
     if (!emails.length) return { ok: false, error: "No recipient emails" };
 
     const { error: delErr } = await supabase
@@ -210,6 +266,21 @@ export async function executeCampaignLaunch(
       if (inserted === 0) {
         return { ok: false, error: "No emails to send" };
       }
+
+      if (!options?.skipStatusUpdate) {
+        const { error: upErr } = await supabase
+          .from("campaigns")
+          .update({
+            status: "running",
+            send_rate_minute: null,
+            send_rate_count: 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", campaignId);
+        if (upErr) return { ok: false, error: upErr.message };
+      }
+
+      return { ok: true, queued: inserted };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Enqueue failed" };
     }

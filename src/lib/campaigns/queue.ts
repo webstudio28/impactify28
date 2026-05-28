@@ -98,7 +98,14 @@ export async function enqueueCampaignEmail(
     run_at: runAt,
   }));
   if (!rows.length) return { inserted: 0 };
-  const { error } = await supabase.from("outbound_email").insert(rows);
-  if (error) throw error;
-  return { inserted: rows.length };
+
+  const INSERT_BATCH = 500;
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += INSERT_BATCH) {
+    const chunk = rows.slice(i, i + INSERT_BATCH);
+    const { error } = await supabase.from("outbound_email").insert(chunk);
+    if (error) throw error;
+    inserted += chunk.length;
+  }
+  return { inserted };
 }

@@ -93,9 +93,10 @@ export async function createSendBatchTickets(
         ? `All ${channelLabel}s failed for campaign: ${s.campaignName ?? s.campaignId}`
         : `${s.failed} ${channelLabel}(s) failed for campaign: ${s.campaignName ?? s.campaignId}`;
 
+      const sample = s.sampleErrors[0] ?? "unknown";
       const message = allFailed
-        ? `Every ${channelLabel} in this send batch failed. ${s.sampleErrors[0] ?? ""}`
-        : `${s.sent} sent successfully, ${s.failed} failed. Sample error: ${s.sampleErrors[0] ?? "unknown"}`;
+        ? `Every ${channelLabel} in this send batch failed. ${sample}`
+        : `${s.sent} sent successfully, ${s.failed} failed. Sample error: ${sample}`;
 
       await createTicket({
         kind,

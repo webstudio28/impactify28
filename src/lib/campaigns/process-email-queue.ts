@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { explainResendSendFailure } from "@/lib/email/resend-errors";
 import type { CampaignSendSummary } from "@/lib/tickets/create-ticket";
 
 const nowIso = () => new Date().toISOString();
@@ -164,12 +165,17 @@ export async function processDueOutboundEmail(
     );
 
     if (!result.ok) {
-      errors.push(`${row.id}: ${result.error}`);
+      const clearError = explainResendSendFailure(result.error, {
+        platformFrom,
+        fromHeader,
+        replyTo: replyTo ?? null,
+      });
+      errors.push(`${row.id}: ${clearError}`);
       campaignTrack(campaignId).failed++;
-      campaignTrack(campaignId).errors.push(`${row.to_email}: ${result.error}`);
+      campaignTrack(campaignId).errors.push(`${row.to_email}: ${clearError}`);
       await supabase
         .from("outbound_email")
-        .update({ status: "failed", error_message: result.error, updated_at: nowIso() })
+        .update({ status: "failed", error_message: clearError, updated_at: nowIso() })
         .eq("id", row.id);
       continue;
     }
