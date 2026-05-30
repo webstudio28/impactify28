@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { renderEmailTemplate } from "@/lib/email/templates/render";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 import { wrapEmailPreviewDocument } from "@/lib/email/preview-document";
@@ -23,9 +23,9 @@ import { ProductsEditor, ListEditor } from "./EmailFormHelpers";
 import { EmailImprovementField } from "./EmailImprovementField";
 import type { ImprovementField, ImprovementIssue } from "@/lib/openai/email-improvements";
 import {
-  buildBodyTextForAnalysis,
-  buildPreheaderForAnalysis,
+  buildFieldsForAnalysis,
 } from "@/lib/email/build-analysis-payload";
+import { ButtonSpinner } from "@/components/ui/ButtonSpinner";
 
 const TEMPLATE_CONFIGS: Record<EmailTemplateType, { maxProducts: number; hasProducts: boolean }> = {
   promotional: { maxProducts: 4, hasProducts: true },
@@ -299,6 +299,7 @@ export function EmailBuilderStep({
   const t = useTranslations("emailWizard");
   const tReady = useTranslations("emailReady");
   const tLocale = useTranslations("locale");
+  const uiLocale = useLocale();
 
   const [fields, setFields] = useState<FormFields>(() => {
     if (initialData) return fieldsFromData(initialData);
@@ -359,18 +360,38 @@ export function EmailBuilderStep({
       case "subject":
         patch({ subjectLine: text });
         break;
-      case "preheader":
-        if (templateType === "promotional") patch({ supportingLine: text });
-        else if (templateType === "seasonal") patch({ urgencyMessage: text });
-        else patch({ launchHeadline: text });
-        break;
-      case "body":
-        if (templateType === "product_launch") patch({ story: text });
-        else if (templateType === "discount_coupon") patch({ offerDescription: text });
-        else patch({ heroHeadline: text });
-        break;
       case "cta":
         patch({ ctaText: text });
+        break;
+      case "heroHeadline":
+        patch({ heroHeadline: text });
+        break;
+      case "supportingLine":
+        patch({ supportingLine: text });
+        break;
+      case "offerDescription":
+        patch({ offerDescription: text });
+        break;
+      case "launchHeadline":
+        patch({ launchHeadline: text });
+        break;
+      case "story":
+        patch({ story: text });
+        break;
+      case "urgencyMessage":
+        patch({ urgencyMessage: text });
+        break;
+      case "countdownText":
+        patch({ countdownText: text });
+        break;
+      case "discountAmount":
+        patch({ discountAmount: text });
+        break;
+      case "couponCode":
+        patch({ couponCode: text.toUpperCase() });
+        break;
+      case "redemptionSteps":
+        patch({ redemptionSteps: text.split(/\n+/).map((x) => x.trim()).filter(Boolean) });
         break;
     }
   }
@@ -386,10 +407,22 @@ export function EmailBuilderStep({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject: fields.subjectLine,
-          preheader: buildPreheaderForAnalysis(templateType, fields),
-          bodyText: buildBodyTextForAnalysis(templateType, fields),
-          ctaText: fields.ctaText,
+          uiLanguage: uiLocale,
+          emailLanguage: fields.language,
+          fields: buildFieldsForAnalysis(templateType, fields, {
+            subject: t("subjectLine"),
+            cta: t("ctaText"),
+            heroHeadline: t("heroHeadline"),
+            supportingLine: t("supportingLine"),
+            offerDescription: t("offerDescription"),
+            launchHeadline: t("launchHeadline"),
+            story: t("story"),
+            urgencyMessage: t("urgencyMessage"),
+            countdownText: t("countdownText"),
+            discountAmount: t("discountAmount"),
+            couponCode: t("couponCode"),
+            redemptionSteps: t("redemptionSteps"),
+          }),
         }),
       });
       const json = (await res.json()) as { issues?: ImprovementIssue[]; error?: string };
@@ -844,28 +877,23 @@ export function EmailBuilderStep({
 
         {/* Promotional */}
         {templateType === "promotional" && (
-          <EmailImprovementField field="body" label={t("emailBodySection")} {...improvementProps}>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("heroHeadline")} *</label>
-                <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("heroHeadlinePh")} />
-              </div>
-              <EmailImprovementField field="preheader" label={t("supportingLine")} {...improvementProps}>
-                <input value={fields.supportingLine} onChange={(e) => patch({ supportingLine: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("supportingLinePh")} />
-              </EmailImprovementField>
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("offerDescription")}</label>
-                <textarea value={fields.offerDescription} onChange={(e) => patch({ offerDescription: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none" placeholder={t("offerDescriptionPh")} />
-              </div>
-              <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
-            </div>
-          </EmailImprovementField>
+          <div className="space-y-4">
+            <EmailImprovementField field="heroHeadline" label={<>{t("heroHeadline")} *</>} {...improvementProps}>
+              <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("heroHeadlinePh")} />
+            </EmailImprovementField>
+            <EmailImprovementField field="supportingLine" label={t("supportingLine")} {...improvementProps}>
+              <input value={fields.supportingLine} onChange={(e) => patch({ supportingLine: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("supportingLinePh")} />
+            </EmailImprovementField>
+            <EmailImprovementField field="offerDescription" label={t("offerDescription")} {...improvementProps}>
+              <textarea value={fields.offerDescription} onChange={(e) => patch({ offerDescription: e.target.value })} rows={2} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none" placeholder={t("offerDescriptionPh")} />
+            </EmailImprovementField>
+            <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
+          </div>
         )}
 
         {/* Product Launch */}
         {templateType === "product_launch" && (
-          <EmailImprovementField field="body" label={t("emailBodySection")} {...improvementProps}>
-            <div className="space-y-4">
+          <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-medium text-ink-muted">{t("productName")} *</label>
@@ -876,66 +904,53 @@ export function EmailBuilderStep({
                   <input value={fields.productImageUrl} onChange={(e) => patch({ productImageUrl: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder="https://..." />
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("launchHeadline")} *</label>
-                <input value={fields.launchHeadline} onChange={(e) => patch({ launchHeadline: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("launchHeadlinePh")} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("story")}</label>
-                <textarea value={fields.story} onChange={(e) => patch({ story: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none" placeholder={t("storyPh")} />
-              </div>
+              <EmailImprovementField field="launchHeadline" label={<>{t("launchHeadline")} *</>} {...improvementProps}>
+                <input value={fields.launchHeadline} onChange={(e) => patch({ launchHeadline: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("launchHeadlinePh")} />
+              </EmailImprovementField>
+              <EmailImprovementField field="story" label={t("story")} {...improvementProps}>
+                <textarea value={fields.story} onChange={(e) => patch({ story: e.target.value })} rows={2} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none" placeholder={t("storyPh")} />
+              </EmailImprovementField>
               <ListEditor items={fields.features} onChange={(v) => patch({ features: v })} max={5} label={t("features")} placeholder={t("featuresPh")} />
               <ListEditor items={fields.benefits} onChange={(v) => patch({ benefits: v })} max={3} label={t("benefits")} placeholder={t("benefitsPh")} />
             </div>
-          </EmailImprovementField>
         )}
 
         {/* Seasonal */}
         {templateType === "seasonal" && (
-          <EmailImprovementField field="body" label={t("emailBodySection")} {...improvementProps}>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("seasonalHeadline")} *</label>
-                <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("heroHeadlinePh")} />
-              </div>
-              <EmailImprovementField field="preheader" label={t("urgencyMessage")} {...improvementProps}>
-                <input value={fields.urgencyMessage} onChange={(e) => patch({ urgencyMessage: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("urgencyMessagePh")} />
-              </EmailImprovementField>
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("countdownText")}</label>
-                <input value={fields.countdownText} onChange={(e) => patch({ countdownText: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("countdownTextPh")} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("offerDescription")}</label>
-                <textarea value={fields.offerDescription} onChange={(e) => patch({ offerDescription: e.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none" placeholder={t("offerDescriptionPh")} />
-              </div>
-              <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
-            </div>
-          </EmailImprovementField>
+          <div className="space-y-4">
+            <EmailImprovementField field="heroHeadline" label={<>{t("seasonalHeadline")} *</>} {...improvementProps}>
+              <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("heroHeadlinePh")} />
+            </EmailImprovementField>
+            <EmailImprovementField field="urgencyMessage" label={t("urgencyMessage")} {...improvementProps}>
+              <input value={fields.urgencyMessage} onChange={(e) => patch({ urgencyMessage: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("urgencyMessagePh")} />
+            </EmailImprovementField>
+            <EmailImprovementField field="countdownText" label={t("countdownText")} {...improvementProps}>
+              <input value={fields.countdownText} onChange={(e) => patch({ countdownText: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("countdownTextPh")} />
+            </EmailImprovementField>
+            <EmailImprovementField field="offerDescription" label={t("offerDescription")} {...improvementProps}>
+              <textarea value={fields.offerDescription} onChange={(e) => patch({ offerDescription: e.target.value })} rows={2} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none" placeholder={t("offerDescriptionPh")} />
+            </EmailImprovementField>
+            <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
+          </div>
         )}
 
         {/* Discount / Coupon */}
         {templateType === "discount_coupon" && (
-          <EmailImprovementField field="body" label={t("emailBodySection")} {...improvementProps}>
-            <div className="space-y-4">
+          <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="text-xs font-medium text-ink-muted">{t("discountAmount")} *</label>
-                  <input value={fields.discountAmount} onChange={(e) => patch({ discountAmount: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("discountAmountPh")} />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-ink-muted">{t("couponCode")} *</label>
-                  <input value={fields.couponCode} onChange={(e) => patch({ couponCode: e.target.value.toUpperCase() })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-mono" placeholder="SAVE20" />
-                </div>
+                <EmailImprovementField field="discountAmount" label={<>{t("discountAmount")} *</>} {...improvementProps}>
+                  <input value={fields.discountAmount} onChange={(e) => patch({ discountAmount: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("discountAmountPh")} />
+                </EmailImprovementField>
+                <EmailImprovementField field="couponCode" label={<>{t("couponCode")} *</>} {...improvementProps}>
+                  <input value={fields.couponCode} onChange={(e) => patch({ couponCode: e.target.value.toUpperCase() })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-mono" placeholder="SAVE20" />
+                </EmailImprovementField>
               </div>
-              <div>
-                <label className="text-xs font-medium text-ink-muted">{t("heroHeadline")}</label>
-                <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("couponHeroHeadlinePh")} />
-              </div>
+              <EmailImprovementField field="heroHeadline" label={t("heroHeadline")} {...improvementProps}>
+                <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("couponHeroHeadlinePh")} />
+              </EmailImprovementField>
               <ListEditor items={fields.redemptionSteps} onChange={(v) => patch({ redemptionSteps: v })} max={5} label={t("redemptionSteps")} placeholder={t("redemptionStepsPh")} />
               <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
             </div>
-          </EmailImprovementField>
         )}
 
         {hasHeroBanner ? heroImageSection : null}
@@ -974,7 +989,14 @@ export function EmailBuilderStep({
               disabled={busy || improveBusy}
               className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-zinc-50 disabled:opacity-60"
             >
-              {improveBusy ? t("checkingImprovements") : t("checkImprovements")}
+              {improveBusy ? (
+                <span className="inline-flex items-center gap-2">
+                  <ButtonSpinner />
+                  {t("checkingImprovements")}
+                </span>
+              ) : (
+                t("checkImprovements")
+              )}
             </button>
             <button
               type="button"
@@ -982,7 +1004,14 @@ export function EmailBuilderStep({
               disabled={busy || improveBusy}
               className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
             >
-              {busy ? tReady("submitting") : tReady("submitForApproval")}
+              {busy ? (
+                <span className="inline-flex items-center gap-2">
+                  <ButtonSpinner />
+                  {tReady("submitting")}
+                </span>
+              ) : (
+                tReady("submitForApproval")
+              )}
             </button>
           </div>
         </div>

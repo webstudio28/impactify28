@@ -38,6 +38,9 @@ export function classifySendError(
   if (lower.includes("invalid") || lower.includes("bounce") || lower.includes("suppressed")) {
     return "contact_invalid";
   }
+  if (lower.includes("request.body") && lower.includes("array")) {
+    return "system_critical";
+  }
   return "provider_transient";
 }
 

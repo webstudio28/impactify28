@@ -75,8 +75,15 @@ export function explainResendSendFailure(rawError: string, ctx: EmailSendContext
     return lines.join(" ");
   }
 
+  if (lower.includes("request.body") && lower.includes("array")) {
+    return (
+      `${rawError} — Resend batch send expects a JSON array of email objects, not a wrapped object. ` +
+      `Platform From: ${platformFrom ?? "(not set)"}.`
+    );
+  }
+
   if (lower.includes("validation_error")) {
-    return `${rawError} | Platform From: ${platformFrom ?? "(not set)"}${replyTo ? ` | User reply-to: ${replyTo} (not verified in Resend)` : ""}`;
+    return `${rawError} | Platform From: ${platformFrom ?? "(not set)"}${replyTo ? ` | User reply-to: ${replyTo}` : ""}`;
   }
 
   return rawError;

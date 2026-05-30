@@ -18,11 +18,10 @@ type Ctx = { params: Promise<{ id: string }> };
 function isDomainError(msg: string): boolean {
   const lower = msg.toLowerCase();
   return (
-    lower.includes("domain") ||
-    lower.includes("verif") ||
+    (lower.includes("domain") &&
+      (lower.includes("not verified") || lower.includes("verify") || lower.includes("verif"))) ||
     lower.includes("not allowed") ||
-    lower.includes("sender") ||
-    lower.includes("validation_error")
+    (lower.includes("sender") && lower.includes("verif"))
   );
 }
 

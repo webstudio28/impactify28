@@ -51,6 +51,33 @@ function rewriteLinks(
   });
 }
 
+function replaceFooterUtilityLinks(html: string, unsubscribeUrl: string, viewUrl: string): {
+  html: string;
+  replacedUnsub: boolean;
+  replacedView: boolean;
+} {
+  let replacedUnsub = false;
+  let replacedView = false;
+
+  const updated = html.replace(
+    /<a\b([^>]*)href=(["'])#\2([^>]*)>([\s\S]*?)<\/a>/gi,
+    (match, before: string, quote: string, after: string, labelRaw: string) => {
+      const label = labelRaw.replace(/<[^>]*>/g, "").trim().toLowerCase();
+      if (!replacedUnsub && /(unsubscribe|отписване|abmelden|désabonner|se désabonner)/i.test(label)) {
+        replacedUnsub = true;
+        return `<a${before}href=${quote}${escapeHtml(unsubscribeUrl)}${quote}${after}>${labelRaw}</a>`;
+      }
+      if (!replacedView && /(view.*browser|виж.*браузър|browser ansehen|voir.*navigateur)/i.test(label)) {
+        replacedView = true;
+        return `<a${before}href=${quote}${escapeHtml(viewUrl)}${quote}${after}>${labelRaw}</a>`;
+      }
+      return match;
+    }
+  );
+
+  return { html: updated, replacedUnsub, replacedView };
+}
+
 export function injectTrackingForEmail(params: {
   html: string;
   recipientId: string;
@@ -78,18 +105,21 @@ export function injectTrackingForEmail(params: {
     expiresAt: null,
   });
 
-  const topLink = `
-<div style="font-size:12px;color:#64748b;text-align:center;margin:0 0 14px;">
-  <a href="${escapeHtml(buildViewInBrowserUrl(viewToken))}" style="color:#64748b;text-decoration:underline;">View this email in your browser</a>
-</div>`;
+  const unsubscribeUrl = buildUnsubscribeUrl(unsubToken);
+  const viewUrl = buildViewInBrowserUrl(viewToken);
 
   const footer = `
 <div style="font-size:12px;color:#64748b;text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;">
-  <a href="${escapeHtml(buildUnsubscribeUrl(unsubToken))}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+  <a href="${escapeHtml(unsubscribeUrl)}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+  &nbsp;&middot;&nbsp;
+  <a href="${escapeHtml(viewUrl)}" style="color:#64748b;text-decoration:underline;">View in browser</a>
 </div>`;
 
   const pixel = `<img src="${escapeHtml(buildOpenPixelUrl(openToken))}" width="1" height="1" alt="" style="display:none;border:0;" />`;
 
-  return rewritten.replace(/<body([^>]*)>/i, (match) => `${match}${topLink}`).replace(/<\/body>/i, `${footer}${pixel}</body>`);
+  const footerLinks = replaceFooterUtilityLinks(rewritten, unsubscribeUrl, viewUrl);
+  const fallbackFooter = footerLinks.replacedUnsub && footerLinks.replacedView ? "" : footer;
+
+  return footerLinks.html.replace(/<\/body>/i, `${fallbackFooter}${pixel}</body>`);
 }
 

@@ -9,6 +9,7 @@ import {
   isPausedBySystem,
   toCanonicalStatus,
 } from "@/lib/campaigns/status-client";
+import { ButtonSpinner } from "@/components/ui/ButtonSpinner";
 
 export type CampaignRow = {
   id: string;
@@ -374,7 +375,14 @@ export function CampaignsTable({
                           onClick={() => void startCampaign(c.id)}
                           className="inline-flex rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-accent-hover disabled:opacity-50"
                         >
-                          {startBusyId === c.id ? t("startingCampaign") : t("startCampaign")}
+                          {startBusyId === c.id ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <ButtonSpinner />
+                              {t("startingCampaign")}
+                            </span>
+                          ) : (
+                            t("startCampaign")
+                          )}
                         </button>
                       ) : null}
                       {isCampaignLiveStatus(c.status) ? (
@@ -384,7 +392,14 @@ export function CampaignsTable({
                           onClick={() => void pauseCampaign(c.id)}
                           className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
                         >
-                          {tm("pause")}
+                          {busyId === c.id ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <ButtonSpinner />
+                              {tm("pause")}
+                            </span>
+                          ) : (
+                            tm("pause")
+                          )}
                         </button>
                       ) : null}
                       {toCanonicalStatus(c.status) === "paused_user" ||
@@ -395,7 +410,14 @@ export function CampaignsTable({
                           onClick={() => void continueCampaign(c.id)}
                           className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
                         >
-                          {tm("resume")}
+                          {busyId === c.id ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <ButtonSpinner />
+                              {tm("resume")}
+                            </span>
+                          ) : (
+                            tm("resume")
+                          )}
                         </button>
                       ) : null}
                       {isPausedBySystem(c) ? (
@@ -436,7 +458,14 @@ export function CampaignsTable({
                           }}
                           className="inline-flex rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
                         >
-                          {deleteBusyId === c.id ? t("deleting") : t("delete")}
+                          {deleteBusyId === c.id ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <ButtonSpinner />
+                              {t("deleting")}
+                            </span>
+                          ) : (
+                            t("delete")
+                          )}
                         </button>
                       ) : null}
                     </div>
@@ -482,7 +511,14 @@ export function CampaignsTable({
                 onClick={() => void confirmDelete()}
                 className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
               >
-                {deleteBusyId ? t("deleting") : t("deleteConfirmSubmit")}
+                {deleteBusyId ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <ButtonSpinner />
+                    {t("deleting")}
+                  </span>
+                ) : (
+                  t("deleteConfirmSubmit")
+                )}
               </button>
             </div>
           </div>

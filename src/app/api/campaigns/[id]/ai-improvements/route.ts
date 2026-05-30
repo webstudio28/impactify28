@@ -1,16 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkAiImprovementsRateLimit } from "@/lib/openai/ai-improvements-rate-limit";
-import { analyzeEmailImprovements } from "@/lib/openai/email-improvements";
+import { analyzeEmailImprovements, type ImprovementField } from "@/lib/openai/email-improvements";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 type Body = {
-  subject?: string;
-  preheader?: string;
-  bodyText?: string;
-  ctaText?: string;
+  uiLanguage?: string;
+  emailLanguage?: string;
+  fields?: { key?: string; label?: string; value?: string }[];
 };
+
+const FIELD_KEYS = new Set<string>([
+  "subject",
+  "cta",
+  "heroHeadline",
+  "supportingLine",
+  "offerDescription",
+  "launchHeadline",
+  "story",
+  "urgencyMessage",
+  "countdownText",
+  "discountAmount",
+  "couponCode",
+  "redemptionSteps",
+]);
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -46,17 +60,24 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const subject = typeof body.subject === "string" ? body.subject.trim() : "";
-  const preheader = typeof body.preheader === "string" ? body.preheader.trim() : "";
-  const bodyText = typeof body.bodyText === "string" ? body.bodyText.trim() : "";
-  const ctaText = typeof body.ctaText === "string" ? body.ctaText.trim() : "";
+  const uiLanguage = typeof body.uiLanguage === "string" ? body.uiLanguage.trim() : "en";
+  const emailLanguage = typeof body.emailLanguage === "string" ? body.emailLanguage.trim() : "en";
+  const fields = Array.isArray(body.fields)
+    ? body.fields
+        .map((f) => ({
+          key: typeof f.key === "string" && FIELD_KEYS.has(f.key.trim()) ? (f.key.trim() as ImprovementField) : null,
+          label: typeof f.label === "string" ? f.label.trim() : "",
+          value: typeof f.value === "string" ? f.value.trim() : "",
+        }))
+        .filter((f): f is { key: ImprovementField; label: string; value: string } => Boolean(f.key && f.label))
+    : [];
 
-  if (!subject && !bodyText && !ctaText) {
+  if (!fields.some((f) => f.value)) {
     return NextResponse.json({ error: "Add some email content before checking" }, { status: 400 });
   }
 
   try {
-    const issues = await analyzeEmailImprovements({ subject, preheader, bodyText, ctaText });
+    const issues = await analyzeEmailImprovements({ uiLanguage, emailLanguage, fields });
     return NextResponse.json({ issues });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Analysis failed";

@@ -4,6 +4,7 @@ import type { CampaignSendSummary } from "@/lib/tickets/create-ticket";
 import { redis } from "@/lib/redis";
 import { hashDestination } from "@/lib/email/tracking";
 import { injectTrackingForEmail } from "@/lib/email/inject-tracking";
+import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 import {
   evaluateBatchAndMaybePause,
   handleCriticalProviderFailure,
@@ -73,7 +74,7 @@ async function sendBatchWithResend(
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ emails }),
+    body: JSON.stringify(emails),
   });
 
   const text = await res.text();
@@ -225,14 +226,14 @@ export async function processDueOutboundEmail(
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, sender_email, sender_display_name, business_name")
+    .select("id, sender_email, sender_display_name, business_name, logo_url")
     .in("id", userIds);
 
   // Platform sending domain — all emails go out from this address.
   // The user's display name is shown in the inbox; their sender_email becomes Reply-To.
   const platformFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
 
-  type ProfileRow = { replyTo: string | null; fromHeader: string | null };
+  type ProfileRow = { replyTo: string | null; fromHeader: string | null; logoUrl: string | null };
   const profileByUser = new Map<string, ProfileRow>(
     (profiles ?? []).map((p) => {
       const displayName = (p.sender_display_name as string | null)?.trim()
@@ -242,7 +243,8 @@ export async function processDueOutboundEmail(
         ? displayName ? `${displayName} <${platformFrom}>` : platformFrom
         : null;
       const replyTo = (p.sender_email as string | null)?.trim() || null;
-      return [p.id as string, { fromHeader, replyTo }];
+      const logoUrl = (p.logo_url as string | null)?.trim() || null;
+      return [p.id as string, { fromHeader, replyTo, logoUrl }];
     })
   );
 
@@ -313,7 +315,8 @@ export async function processDueOutboundEmail(
         continue;
       }
       const subject = typeof campaignContent.email_subject === "string" ? campaignContent.email_subject.trim() : "";
-      const html = typeof campaignContent.email_html === "string" ? campaignContent.email_html.trim() : "";
+      const htmlRaw = typeof campaignContent.email_html === "string" ? campaignContent.email_html.trim() : "";
+      const html = injectLogoIntoHtml(htmlRaw, profile?.logoUrl ?? null);
       if (!subject || !html) {
         const errMsg = "Campaign email content is empty";
         for (const row of rows) {

@@ -1,4 +1,16 @@
-export type ImprovementField = "subject" | "preheader" | "body" | "cta";
+export type ImprovementField =
+  | "subject"
+  | "cta"
+  | "heroHeadline"
+  | "supportingLine"
+  | "offerDescription"
+  | "launchHeadline"
+  | "story"
+  | "urgencyMessage"
+  | "countdownText"
+  | "discountAmount"
+  | "couponCode"
+  | "redemptionSteps";
 
 export type ImprovementIssue = {
   field: ImprovementField;
@@ -8,22 +20,46 @@ export type ImprovementIssue = {
 };
 
 export type AnalyzeEmailInput = {
-  subject: string;
-  preheader: string;
-  bodyText: string;
-  ctaText: string;
+  uiLanguage: string;
+  emailLanguage: string;
+  fields: { key: ImprovementField; label: string; value: string }[];
 };
 
 const SYSTEM_PROMPT = `You are an email deliverability expert. Analyze the email fields below and return a JSON array.
-Each item must have: field ("subject"|"preheader"|"body"|"cta"), severity ("high"|"medium"|"low"),
+Each item must have: field (exactly one of the provided field keys), severity ("high"|"medium"|"low"),
 reason (one sentence explaining the deliverability or engagement risk),
 suggestions (array of exactly 3 improved alternatives as plain strings).
-Focus on: spam trigger words, excessive punctuation, all-caps, vague subject lines,
-missing preheader, weak CTAs. Return [] if no issues found.
+Language rules:
+- Write "reason" in the user's interface language.
+- Write each suggestion in the same language as the original field value. If a field is empty, use the declared email language.
+- Never switch suggestions to English unless the original/email language is English.
+
+Deliverability rules:
+- Avoid words and phrasing that commonly push emails into Promotions/Spam: "free", "guaranteed", "risk-free", "limited time", "act now", "urgent", "exclusive", "winner", "cash", "bonus", "miracle", "cheap", "clearance", "save big", "best price", "lowest price", "100%", "no obligation", "click here", repeated "buy now", and aggressive discount language.
+- Avoid heavy discount framing in subject/preheader ("20% off", "50% off", "sale", "deal", "coupon") unless softened and made specific.
+- Avoid excessive punctuation, emoji overload, all-caps, misleading scarcity, clickbait, and spammy urgency.
+- Prefer natural, specific product value, brand context, clear but calm CTA text, and concise human copy.
+- For Bulgarian, avoid overused promotional words like "отстъпка", "промоция", "оферта", "само днес", "побързай", "купи сега" when they dominate the copy; suggest calmer wording such as product value, collection context, material/style, or availability.
+- Do not flag product catalog fields unless they are explicitly included in the provided fields list.
+
+Return [] if no issues found.
 Return ONLY valid JSON: either an array of issues, or an object with key "issues" containing that array.`;
 
 function isImprovementField(v: unknown): v is ImprovementField {
-  return v === "subject" || v === "preheader" || v === "body" || v === "cta";
+  return (
+    v === "subject" ||
+    v === "cta" ||
+    v === "heroHeadline" ||
+    v === "supportingLine" ||
+    v === "offerDescription" ||
+    v === "launchHeadline" ||
+    v === "story" ||
+    v === "urgencyMessage" ||
+    v === "countdownText" ||
+    v === "discountAmount" ||
+    v === "couponCode" ||
+    v === "redemptionSteps"
+  );
 }
 
 function isSeverity(v: unknown): v is ImprovementIssue["severity"] {
@@ -75,10 +111,10 @@ export async function analyzeEmailImprovements(input: AnalyzeEmailInput): Promis
   const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
 
   const userContent = [
-    `Subject: ${input.subject || "(empty)"}`,
-    `Preheader: ${input.preheader || "(empty)"}`,
-    `Body: ${input.bodyText || "(empty)"}`,
-    `CTA button text: ${input.ctaText || "(empty)"}`,
+    `Interface language for reasons: ${input.uiLanguage}`,
+    `Email/content language for empty-field suggestions: ${input.emailLanguage}`,
+    "Fields to analyze (return only these exact keys):",
+    JSON.stringify(input.fields, null, 2),
   ].join("\n");
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
