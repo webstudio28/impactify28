@@ -498,6 +498,7 @@
     "clicks": "Clicks",
     "opened": "Opened",
     "liveHint": "Results update automatically every few seconds while the campaign is running.",
+    "resultsRefreshHint": "Campaign finished — use Refresh to load the latest opens and clicks.",
     "liveUpdating": "Updating…",
     "ctr": "CTR (clicks / sent)",
     "ctrHint": "{clicks} clicks from {sent} sent",

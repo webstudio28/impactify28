@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redis } from "@/lib/redis";
 import { shortLinkPublicUrl } from "@/lib/links/short-domain";
 
@@ -56,11 +57,29 @@ export async function GET(_req: Request, ctx: Ctx) {
 
   const shortLinkClicks = linksWithClicks.reduce((sum, l) => sum + l.clicks, 0);
 
-  const { data: liveMetrics } = await supabase
-    .from("campaign_metrics_live")
-    .select("sent_count, failed_count, pending_count, open_count, click_count, unique_click_count, updated_at")
-    .eq("campaign_id", id)
-    .maybeSingle();
+  // Metrics are written by the service role (tracking workers). Read via admin after
+  // ownership check — the user-scoped client is often blocked by RLS on this table.
+  let liveMetrics: {
+    sent_count: number;
+    failed_count: number;
+    pending_count: number;
+    open_count: number;
+    click_count: number;
+    unique_click_count: number;
+    updated_at: string;
+  } | null = null;
+
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("campaign_metrics_live")
+      .select("sent_count, failed_count, pending_count, open_count, click_count, unique_click_count, updated_at")
+      .eq("campaign_id", id)
+      .maybeSingle();
+    liveMetrics = data;
+  } catch {
+    liveMetrics = null;
+  }
 
   const sentCount = sent ?? 0;
   const failedCount = failed ?? 0;

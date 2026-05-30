@@ -13,7 +13,7 @@ export async function logCampaignEvent(
     payload?: Record<string, unknown> | null;
   }
 ): Promise<void> {
-  await supabase.from("campaign_events").insert({
+  const { error } = await supabase.from("campaign_events").insert({
     campaign_id: params.campaignId,
     recipient_id: params.recipientId ?? null,
     event_type: params.eventType,
@@ -22,6 +22,14 @@ export async function logCampaignEvent(
     payload: params.payload ?? null,
     event_time: nowIso(),
   });
+  if (error) {
+    console.error(
+      "[logCampaignEvent:metrics]",
+      error.message,
+      params.eventType,
+      params.campaignId
+    );
+  }
 }
 
 export async function incrementLiveMetric(
@@ -29,11 +37,18 @@ export async function incrementLiveMetric(
   campaignId: string,
   column: "open_count" | "click_count" | "unique_open_count" | "unique_click_count"
 ): Promise<void> {
-  const { data: row } = await supabase
+  const { data: row, error: selectError } = await supabase
     .from("campaign_metrics_live")
-    .select("campaign_id, open_count, click_count, unique_open_count, unique_click_count")
+    .select(
+      "campaign_id, sent_count, failed_count, pending_count, delivered_count, open_count, click_count, unique_open_count, unique_click_count"
+    )
     .eq("campaign_id", campaignId)
     .maybeSingle();
+
+  if (selectError) {
+    console.error("[incrementLiveMetric] select failed:", selectError.message, campaignId);
+    return;
+  }
 
   const base = {
     open_count: Number(row?.open_count ?? 0),
@@ -43,13 +58,23 @@ export async function incrementLiveMetric(
   };
   base[column] += 1;
 
-  await supabase.from("campaign_metrics_live").upsert({
-    campaign_id: campaignId,
-    open_count: base.open_count,
-    click_count: base.click_count,
-    unique_open_count: base.unique_open_count,
-    unique_click_count: base.unique_click_count,
-    updated_at: nowIso(),
-  });
+  const { error: upsertError } = await supabase.from("campaign_metrics_live").upsert(
+    {
+      campaign_id: campaignId,
+      sent_count: Number(row?.sent_count ?? 0),
+      failed_count: Number(row?.failed_count ?? 0),
+      pending_count: Number(row?.pending_count ?? 0),
+      delivered_count: Number(row?.delivered_count ?? 0),
+      open_count: base.open_count,
+      click_count: base.click_count,
+      unique_open_count: base.unique_open_count,
+      unique_click_count: base.unique_click_count,
+      updated_at: nowIso(),
+    },
+    { onConflict: "campaign_id" }
+  );
+  if (upsertError) {
+    console.error("[incrementLiveMetric] upsert failed:", upsertError.message, campaignId);
+  }
 }
 

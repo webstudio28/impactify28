@@ -28,13 +28,17 @@ export async function GET(_req: Request, ctx: Ctx) {
       stage: "pixel",
     });
     await incrementLiveMetric(supabase, payload.cid, "open_count");
-    const uniqueKey = `open_unique:${payload.rid}`;
-    const first = await redis.set(uniqueKey, "1", { nx: true, ex: 60 * 60 * 24 * 90 });
-    if (first) {
-      await incrementLiveMetric(supabase, payload.cid, "unique_open_count");
+    try {
+      const uniqueKey = `open_unique:${payload.rid}`;
+      const first = await redis.set(uniqueKey, "1", { nx: true, ex: 60 * 60 * 24 * 90 });
+      if (first) {
+        await incrementLiveMetric(supabase, payload.cid, "unique_open_count");
+      }
+    } catch (e) {
+      console.error("[tracking/open] redis:", e instanceof Error ? e.message : e);
     }
-  } catch {
-    // Never break pixel response for tracking errors.
+  } catch (e) {
+    console.error("[tracking/open]", e instanceof Error ? e.message : e);
   }
 
   return new NextResponse(PIXEL_GIF, {

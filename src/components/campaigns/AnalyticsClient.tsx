@@ -47,6 +47,7 @@ export function AnalyticsClient({ campaignId }: { campaignId: string }) {
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [liveUpdating, setLiveUpdating] = useState(false);
+  const [metricsLoading, setMetricsLoading] = useState(false);
   const [sales, setSales] = useState<SalesPayload | null>(null);
   const [salesLoading, setSalesLoading] = useState(false);
 
@@ -62,15 +63,20 @@ export function AnalyticsClient({ campaignId }: { campaignId: string }) {
   }, [campaignId]);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/campaigns/${campaignId}/analytics`, { cache: "no-store" });
-    const json = (await res.json()) as AnalyticsPayload & { error?: string };
-    if (!res.ok) {
-      setError(json.error ?? t("loadFailed"));
-      return false;
+    setMetricsLoading(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/analytics`, { cache: "no-store" });
+      const json = (await res.json()) as AnalyticsPayload & { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? t("loadFailed"));
+        return false;
+      }
+      setError(null);
+      setData(json);
+      return true;
+    } finally {
+      setMetricsLoading(false);
     }
-    setError(null);
-    setData(json);
-    return true;
   }, [campaignId, t]);
 
   useEffect(() => {
@@ -159,11 +165,23 @@ export function AnalyticsClient({ campaignId }: { campaignId: string }) {
 
   return (
     <div className="space-y-6">
-      {isLive ? (
-        <p className="text-xs text-ink-muted">
-          {liveUpdating ? t("liveUpdating") : t("liveHint")}
-        </p>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {isLive ? (
+          <p className="text-xs text-ink-muted">
+            {liveUpdating ? t("liveUpdating") : t("liveHint")}
+          </p>
+        ) : (
+          <p className="text-xs text-ink-muted">{t("resultsRefreshHint")}</p>
+        )}
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={metricsLoading}
+          className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-ink-muted hover:bg-zinc-50 disabled:opacity-50"
+        >
+          {metricsLoading ? t("liveUpdating") : t("salesRefresh")}
+        </button>
+      </div>
 
       <div className={`grid grid-cols-2 gap-3 ${isEmail ? "sm:grid-cols-3 lg:grid-cols-6" : "sm:grid-cols-4"}`}>
         {isEmail ? <StatCard label={t("sent")} value={counts.sent} color="emerald" /> : null}
