@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Mark `running` / `paused` campaigns as `completed` when they have no pending outbound rows left.
+ * Mark active campaigns as completed when they have no pending outbound rows left.
  * Pass `campaignIds` from a send batch so admin/cron never scans unrelated campaigns.
  */
 export async function syncQueuedCampaignsToCompleted(
@@ -28,7 +28,7 @@ export async function syncQueuedCampaignsToCompleted(
         .from("campaigns")
         .update({ status: "completed", updated_at: new Date().toISOString() })
         .eq("id", id)
-        .in("status", ["running", "paused", "queued"]);
+        .in("status", ["running", "queued", "in_progress", "paused_user", "paused_system"]);
     }
   }
 }

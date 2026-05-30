@@ -3,6 +3,8 @@ import { enqueueCampaignEmail, enqueueCampaignSms } from "@/lib/campaigns/queue"
 import { getInvalidPlatformFromWarning } from "@/lib/email/resend-errors";
 import { injectLogoIntoHtml } from "@/lib/openai/generate-campaign-email";
 import { createTicket } from "@/lib/tickets/create-ticket";
+import { toCanonicalStatus, toStoredStatus } from "@/lib/campaigns/state-machine";
+import { kickoffCampaignProcessing } from "@/lib/qstash";
 
 const AUDIENCE_PAGE_SIZE = 1000;
 
@@ -43,14 +45,14 @@ async function fetchAudienceValues(
 }
 
 export type ExecuteCampaignLaunchOptions = {
-  /** When the HTTP handler already set status to `running` before background enqueue. */
+  /** When the HTTP handler already set status to in-progress before background enqueue. */
   skipReadyCheck?: boolean;
-  /** Skip the final `running` update (status already set). */
+  /** Skip the final in-progress update (status already set). */
   skipStatusUpdate?: boolean;
 };
 
 /**
- * Enqueues outbound messages and sets campaign to `running`.
+ * Enqueues outbound messages and sets campaign to in-progress.
  * Used after admin approval (`ready_to_launch`) or trusted server paths.
  */
 export async function executeCampaignLaunch(
@@ -61,10 +63,9 @@ export async function executeCampaignLaunch(
   const { data: campaign, error: cErr } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
 
   if (cErr || !campaign) return { ok: false, error: "Campaign not found" };
-  const allowedStatus = options?.skipReadyCheck
-    ? ["ready_to_launch", "running"]
-    : ["ready_to_launch"];
-  if (!allowedStatus.includes(campaign.status as string)) {
+  const canonicalStatus = toCanonicalStatus((campaign.status as string) ?? "");
+  const allowedCanonical = options?.skipReadyCheck ? ["ready", "in_progress"] : ["ready"];
+  if (!canonicalStatus || !allowedCanonical.includes(canonicalStatus)) {
     return { ok: false, error: "Campaign is not approved for launch" };
   }
   if (!campaign.audience_id) {
@@ -271,7 +272,7 @@ export async function executeCampaignLaunch(
         const { error: upErr } = await supabase
           .from("campaigns")
           .update({
-            status: "running",
+            status: toStoredStatus("in_progress"),
             send_rate_minute: null,
             send_rate_count: 0,
             updated_at: new Date().toISOString(),
@@ -279,6 +280,8 @@ export async function executeCampaignLaunch(
           .eq("id", campaignId);
         if (upErr) return { ok: false, error: upErr.message };
       }
+
+      await kickoffCampaignProcessing(campaignId, "email");
 
       return { ok: true, queued: inserted };
     } catch (e) {
@@ -289,7 +292,7 @@ export async function executeCampaignLaunch(
   const { error: upErr } = await supabase
     .from("campaigns")
     .update({
-      status: "running",
+      status: toStoredStatus("in_progress"),
       send_rate_minute: null,
       send_rate_count: 0,
       updated_at: new Date().toISOString(),
@@ -297,6 +300,8 @@ export async function executeCampaignLaunch(
     .eq("id", campaignId);
 
   if (upErr) return { ok: false, error: upErr.message };
+
+  await kickoffCampaignProcessing(campaignId, "sms");
 
   return { ok: true };
 }
@@ -307,6 +312,6 @@ async function resetCampaignToReadyToLaunch(
 ): Promise<void> {
   await supabase
     .from("campaigns")
-    .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
+    .update({ status: toStoredStatus("ready"), updated_at: new Date().toISOString() })
     .eq("id", campaignId);
 }

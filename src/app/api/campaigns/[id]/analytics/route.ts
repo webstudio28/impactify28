@@ -15,7 +15,9 @@ export async function GET(_req: Request, ctx: Ctx) {
 
   const { data: campaign, error: cErr } = await supabase
     .from("campaigns")
-    .select("id, name, status, channel, created_at, scheduled_at, user_id")
+    .select(
+      "id, name, status, channel, created_at, scheduled_at, user_id, started_at, paused_by, paused_reason_code, paused_reason_message"
+    )
     .eq("id", id)
     .single();
 
@@ -52,14 +54,41 @@ export async function GET(_req: Request, ctx: Ctx) {
     })
   );
 
-  const totalClicks = linksWithClicks.reduce((sum, l) => sum + l.clicks, 0);
-  const ctr = total > 0 ? Math.round((totalClicks / total) * 1000) / 10 : 0;
+  const shortLinkClicks = linksWithClicks.reduce((sum, l) => sum + l.clicks, 0);
+
+  const { data: liveMetrics } = await supabase
+    .from("campaign_metrics_live")
+    .select("sent_count, failed_count, pending_count, open_count, click_count, unique_click_count, updated_at")
+    .eq("campaign_id", id)
+    .maybeSingle();
+
+  const sentCount = sent ?? 0;
+  const failedCount = failed ?? 0;
+  const pendingCount = pending ?? 0;
+  const openCount = Number(liveMetrics?.open_count ?? 0);
+  const clickCount = Math.max(Number(liveMetrics?.click_count ?? 0), shortLinkClicks);
+  const ctrDenominator = campaign.channel === "email" ? sentCount : total;
+  const ctr = ctrDenominator > 0 ? Math.round((clickCount / ctrDenominator) * 1000) / 10 : 0;
 
   return NextResponse.json({
     campaign,
-    counts: { sent: sent ?? 0, failed: failed ?? 0, pending: pending ?? 0, total },
+    counts: {
+      sent: sentCount,
+      failed: failedCount,
+      pending: pendingCount,
+      total,
+      opened: openCount,
+    },
     links: linksWithClicks,
-    totalClicks,
+    totalClicks: clickCount,
     ctr,
+    live: liveMetrics
+      ? {
+          open_count: openCount,
+          click_count: clickCount,
+          unique_click_count: Number(liveMetrics.unique_click_count ?? 0),
+          updated_at: liveMetrics.updated_at,
+        }
+      : null,
   });
 }

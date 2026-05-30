@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { EMAIL_FONTS } from "@/lib/email/fonts";
+import { toCanonicalStatus, transitionCampaign } from "@/lib/campaigns/state-machine";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -171,6 +172,29 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
   const isAdmin = profile?.role === "admin";
+
+  const { data: campaign, error: campaignErr } = await supabase
+    .from("campaigns")
+    .select("id, user_id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (campaignErr || !campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!isAdmin && campaign.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const canonical = toCanonicalStatus(campaign.status as string);
+  if (canonical === "paused_user") {
+    const transitioned = await transitionCampaign(supabase, id, "cancelled", { actor: isAdmin ? "admin" : "user" });
+    if (!transitioned.ok) return NextResponse.json({ error: transitioned.error }, { status: 400 });
+    return NextResponse.json({ ok: true, status: transitioned.status });
+  }
+
+  // Backward compatibility: allow hard delete for draft/rejected via existing endpoint.
+  if (canonical !== "draft" && campaign.status !== "rejected") {
+    return NextResponse.json(
+      { error: "Only draft/rejected campaigns can be deleted directly. Pause campaign first to cancel it." },
+      { status: 400 }
+    );
+  }
 
   let data: { id: string }[] | null = null;
   let error: { message: string } | null = null;

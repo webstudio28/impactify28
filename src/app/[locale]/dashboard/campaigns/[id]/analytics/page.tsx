@@ -33,7 +33,8 @@ export default async function AnalyticsPage({
           {t("backCampaigns")}
         </a>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{campaign.name}</h1>
-        <p className="mt-1 text-sm text-ink-muted capitalize">{t("status")}: {campaign.status}</p>
+        <p className="mt-1 text-sm text-ink-muted">{t("resultsTitle")}</p>
+        <p className="mt-0.5 text-sm text-ink-muted capitalize">{t("status")}: {campaign.status}</p>
       </div>
       <AnalyticsClient campaignId={id} />
     </div>

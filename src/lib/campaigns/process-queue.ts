@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendSms } from "@/lib/sms";
 import type { CampaignSendSummary } from "@/lib/tickets/create-ticket";
+import {
+  evaluateBatchAndMaybePause,
+  handleCriticalProviderFailure,
+} from "@/lib/campaigns/incident";
+import { classifySendError, logCampaignEvent } from "@/lib/campaigns/event-log";
+import { toCanonicalStatus } from "@/lib/campaigns/state-machine";
 
 const smsOptions = () => ({
   senderId: process.env.SMS_SENDER_ID || undefined,
@@ -48,6 +54,12 @@ async function rollbackRateSlot(supabase: SupabaseClient, campaignId: string, re
   if (error) console.warn("[sms] campaign_rate_rollback:", error.message);
 }
 
+export type SmsProcessOptions = {
+  limit?: number;
+  campaignId?: string;
+  cursor?: number;
+};
+
 export type SmsProcessResult = {
   processed: number;
   errors: string[];
@@ -57,6 +69,7 @@ export type SmsProcessResult = {
   campaignSummaries: CampaignSendSummary[];
   /** Set when the SMS provider is not configured — caller should create a critical ticket */
   providerError: string | null;
+  nextCursor?: number;
 };
 
 /**
@@ -65,51 +78,121 @@ export type SmsProcessResult = {
  */
 export async function processDueOutboundSms(
   supabase: SupabaseClient,
-  options?: { limit?: number }
+  options?: SmsProcessOptions
 ): Promise<SmsProcessResult> {
   const limit = options?.limit ?? 80;
+  const cursor = options?.cursor ?? 0;
+  const singleCampaignId = options?.campaignId?.trim();
   const ts = nowIso();
 
   // Provider config check — fail fast before any DB work
   const smsProvider = process.env.SMS_PROVIDER?.toLowerCase().trim();
   if (!smsProvider) {
+    const providerError =
+      "SMS_PROVIDER environment variable is not set. Supported: budgetsms, connectix, twilio, vonage.";
+    const { data: activeCampaigns } = await supabase
+      .from("campaigns")
+      .select("id")
+      .in("status", ["running", "queued", "in_progress"]);
+    for (const c of activeCampaigns ?? []) {
+      await handleCriticalProviderFailure(
+        supabase,
+        c.id as string,
+        "sms",
+        providerError,
+        "sms_provider_not_configured"
+      );
+    }
     return {
       processed: 0,
       errors: ["SMS_PROVIDER is not set"],
       campaignIds: [],
       skippedRateLimit: 0,
       campaignSummaries: [],
-      providerError: "SMS_PROVIDER environment variable is not set. Supported: budgetsms, connectix, twilio, vonage.",
+      providerError,
     };
   }
 
-  const { data: running, error: rErr } = await supabase
-    .from("campaigns")
-    .select("id, name, user_id")
-    .in("status", ["running", "queued"]);
-  if (rErr) throw rErr;
-  if (!running?.length) {
-    return { processed: 0, errors: [], campaignIds: [], skippedRateLimit: 0, campaignSummaries: [], providerError: null };
+  let running: { id: string; name: string | null; user_id: string | null }[] = [];
+
+  if (singleCampaignId) {
+    const { data: row, error: cErr } = await supabase
+      .from("campaigns")
+      .select("id, name, user_id, status")
+      .eq("id", singleCampaignId)
+      .maybeSingle();
+    if (cErr) throw cErr;
+    if (!row || toCanonicalStatus(row.status as string) !== "in_progress") {
+      return {
+        processed: 0,
+        errors: [],
+        campaignIds: [],
+        skippedRateLimit: 0,
+        campaignSummaries: [],
+        providerError: null,
+        nextCursor: cursor,
+      };
+    }
+    running = [
+      {
+        id: row.id as string,
+        name: row.name as string | null,
+        user_id: row.user_id as string | null,
+      },
+    ];
+  } else {
+    const { data: rows, error: rErr } = await supabase
+      .from("campaigns")
+      .select("id, name, user_id")
+      .in("status", ["running", "queued", "in_progress"]);
+    if (rErr) throw rErr;
+    running = (rows ?? []) as typeof running;
   }
 
-  const runningIds = running.map((r) => r.id as string).filter(Boolean);
+  if (!running.length) {
+    return {
+      processed: 0,
+      errors: [],
+      campaignIds: [],
+      skippedRateLimit: 0,
+      campaignSummaries: [],
+      providerError: null,
+      nextCursor: cursor,
+    };
+  }
+
+  const runningIds = running.map((r) => r.id).filter(Boolean);
   const campaignMeta = new Map(
-    running.map((r) => [r.id as string, { name: r.name as string | null, userId: r.user_id as string | null }])
+    running.map((r) => [r.id, { name: r.name, userId: r.user_id }])
   );
 
-  const { data: batch, error } = await supabase
+  let batchQuery = supabase
     .from("outbound_sms")
     .select("id, campaign_id, to_phone, body")
     .eq("status", "pending")
     .lte("run_at", ts)
     .in("campaign_id", runningIds)
     .order("run_at", { ascending: true })
-    .limit(limit);
+    .order("id", { ascending: true });
+
+  batchQuery = batchQuery.limit(limit);
+
+  const { data: batch, error } = await batchQuery;
 
   if (error) throw error;
   if (!batch?.length) {
-    return { processed: 0, errors: [], campaignIds: [], skippedRateLimit: 0, campaignSummaries: [], providerError: null };
+    return {
+      processed: 0,
+      errors: [],
+      campaignIds: [],
+      skippedRateLimit: 0,
+      campaignSummaries: [],
+      providerError: null,
+      nextCursor: cursor,
+    };
   }
+
+  const nextCursor = singleCampaignId ? cursor + batch.length : undefined;
 
   const errors: string[] = [];
   let processed = 0;
@@ -118,14 +201,28 @@ export async function processDueOutboundSms(
 
   // Track per-campaign outcomes
   const perCampaign = new Map<string, { sent: number; failed: number; errors: string[] }>();
+  const batchWindow = new Map<string, { sent: number; failed: number }>();
+  const pausedCampaigns = new Set<string>();
   function campaignTrack(id: string) {
     if (!perCampaign.has(id)) perCampaign.set(id, { sent: 0, failed: 0, errors: [] });
     return perCampaign.get(id)!;
+  }
+  function batchTrack(id: string) {
+    if (!batchWindow.has(id)) batchWindow.set(id, { sent: 0, failed: 0 });
+    return batchWindow.get(id)!;
   }
 
   for (const row of batch) {
     const campaignId = row.campaign_id as string | null;
     if (!campaignId) continue;
+    if (pausedCampaigns.has(campaignId)) continue;
+
+    const { data: statusRow } = await supabase
+      .from("campaigns")
+      .select("status")
+      .eq("id", campaignId)
+      .maybeSingle();
+    if (toCanonicalStatus((statusRow?.status as string) ?? "") !== "in_progress") continue;
 
     const rate = await tryReserveRateSlot(supabase, campaignId);
     if (!rate.ok) {
@@ -138,9 +235,20 @@ export async function processDueOutboundSms(
       const result = await sendSms(row.to_phone, row.body, opts);
       if (!result.ok) {
         const msg = failureReason(result.data, result.status);
+        const errorClass = classifySendError(msg, { statusCode: result.status, provider: "sms" });
         errors.push(`${row.id}: ${msg}`);
         campaignTrack(campaignId).failed++;
         campaignTrack(campaignId).errors.push(`${row.to_phone}: ${msg}`);
+        batchTrack(campaignId).failed++;
+        await logCampaignEvent(supabase, {
+          campaign_id: campaignId,
+          recipient_id: row.id as string,
+          event_type: "failed",
+          provider: "sms",
+          error_class: errorClass,
+          error_code: String(result.status),
+          error_message: msg,
+        });
         await rollbackRateSlot(supabase, campaignId, reserved);
         reserved = false;
         await supabase
@@ -152,6 +260,22 @@ export async function processDueOutboundSms(
             updated_at: nowIso(),
           })
           .eq("id", row.id);
+
+        if (errorClass === "system_critical" || result.status === 401) {
+          await handleCriticalProviderFailure(supabase, campaignId, "sms", msg);
+          pausedCampaigns.add(campaignId);
+          continue;
+        }
+
+        const w = batchTrack(campaignId);
+        const paused = await evaluateBatchAndMaybePause(
+          supabase,
+          campaignId,
+          w.sent,
+          w.failed,
+          "sms"
+        );
+        if (paused) pausedCampaigns.add(campaignId);
         continue;
       }
 
@@ -168,17 +292,45 @@ export async function processDueOutboundSms(
       if (upErr) throw upErr;
       processed++;
       campaignTrack(campaignId).sent++;
+      batchTrack(campaignId).sent++;
+      await logCampaignEvent(supabase, {
+        campaign_id: campaignId,
+        recipient_id: row.id as string,
+        event_type: "sent",
+        provider: "sms",
+        provider_event_id: ref,
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      const errorClass = classifySendError(msg, { provider: "sms" });
       errors.push(`${row.id}: ${msg}`);
       campaignTrack(campaignId).failed++;
       campaignTrack(campaignId).errors.push(`${row.to_phone ?? row.id}: ${msg}`);
+      batchTrack(campaignId).failed++;
+      await logCampaignEvent(supabase, {
+        campaign_id: campaignId,
+        recipient_id: row.id as string,
+        event_type: "failed",
+        provider: "sms",
+        error_class: errorClass,
+        error_message: msg,
+      });
       await rollbackRateSlot(supabase, campaignId, reserved);
       reserved = false;
       await supabase
         .from("outbound_sms")
         .update({ status: "failed", error_message: msg, updated_at: nowIso() })
         .eq("id", row.id);
+
+      const w = batchTrack(campaignId);
+      const paused = await evaluateBatchAndMaybePause(
+        supabase,
+        campaignId,
+        w.sent,
+        w.failed,
+        "sms"
+      );
+      if (paused) pausedCampaigns.add(campaignId);
     }
   }
 
@@ -200,5 +352,13 @@ export async function processDueOutboundSms(
       };
     });
 
-  return { processed, errors, campaignIds, skippedRateLimit, campaignSummaries, providerError: null };
+  return {
+    processed,
+    errors,
+    campaignIds,
+    skippedRateLimit,
+    campaignSummaries,
+    providerError: null,
+    nextCursor,
+  };
 }

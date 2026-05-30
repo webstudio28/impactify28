@@ -13,6 +13,8 @@ export async function GET(
     return err as NextResponse;
   }
 
+  const eventsLimit = 50;
+
   const [
     { data: campaign },
     { data: steps },
@@ -20,6 +22,8 @@ export async function GET(
     { data: emailSummary },
     { data: recentSms },
     { data: recentEmail },
+    { data: incidents },
+    { data: campaignEvents },
   ] = await Promise.all([
     db
       .from("campaigns")
@@ -29,6 +33,7 @@ export async function GET(
         created_at, updated_at, user_id, email_subject, email_html,
         email_include_all, email_generation_input, send_rate_minute,
         send_rate_count, audience_id,
+        paused_by, paused_reason_code, paused_reason_message,
         profiles!inner(id, business_name, sender_email, sender_display_name),
         audiences(id, name, audience_type, audience_members(count))
       `
@@ -60,6 +65,21 @@ export async function GET(
       .eq("campaign_id", id)
       .order("created_at", { ascending: false })
       .limit(100),
+    db
+      .from("campaign_incidents")
+      .select(
+        "id, status, severity, trigger_type, summary, details, opened_at, resolved_at, resolved_by"
+      )
+      .eq("campaign_id", id)
+      .order("opened_at", { ascending: false }),
+    db
+      .from("campaign_events")
+      .select(
+        "id, recipient_id, event_type, event_time, provider, error_class, error_code, error_message, latency_ms"
+      )
+      .eq("campaign_id", id)
+      .order("event_time", { ascending: false })
+      .limit(eventsLimit),
   ]);
 
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
@@ -115,5 +135,8 @@ export async function GET(
       sms: recentSms ?? [],
       email: recentEmail ?? [],
     },
+    incidents: incidents ?? [],
+    events: campaignEvents ?? [],
+    openIncidentCount: (incidents ?? []).filter((i) => i.status === "open").length,
   });
 }

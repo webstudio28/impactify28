@@ -3,6 +3,11 @@ import Link from "next/link";
 import { getAdminUser } from "@/lib/admin/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { StatusBadge, ChannelBadge } from "@/components/admin/StatusBadge";
+import {
+  CampaignObservabilityPanel,
+  type CampaignEventRow,
+  type CampaignIncidentRow,
+} from "@/components/admin/CampaignObservabilityPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +78,8 @@ export default async function AdminCampaignDetailPage({
     { count: emailSent },
     { count: emailFailed },
     { count: emailPending },
+    { data: incidents },
+    { data: campaignEvents },
   ] = await Promise.all([
     db
       .from("campaigns")
@@ -80,6 +87,7 @@ export default async function AdminCampaignDetailPage({
         id, name, status, channel, scheduled_at, send_immediately,
         created_at, updated_at, user_id, email_subject,
         send_rate_count, audience_id,
+        paused_by, paused_reason_code, paused_reason_message,
         profiles!inner(id, business_name, sender_email, sender_display_name),
         audiences(id, name, audience_type, audience_members(count))
       `)
@@ -108,6 +116,21 @@ export default async function AdminCampaignDetailPage({
     db.from("outbound_email").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "sent"),
     db.from("outbound_email").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "failed"),
     db.from("outbound_email").select("*", { count: "exact", head: true }).eq("campaign_id", id).eq("status", "pending"),
+    db
+      .from("campaign_incidents")
+      .select(
+        "id, status, severity, trigger_type, summary, details, opened_at, resolved_at, resolved_by"
+      )
+      .eq("campaign_id", id)
+      .order("opened_at", { ascending: false }),
+    db
+      .from("campaign_events")
+      .select(
+        "id, recipient_id, event_type, event_time, provider, error_class, error_code, error_message, latency_ms"
+      )
+      .eq("campaign_id", id)
+      .order("event_time", { ascending: false })
+      .limit(50),
   ]);
 
   if (!campaign) notFound();
@@ -195,6 +218,16 @@ export default async function AdminCampaignDetailPage({
           </div>
         </section>
       )}
+
+      <CampaignObservabilityPanel
+        campaignId={id}
+        campaignStatus={campaign.status as string}
+        pausedBy={(campaign.paused_by as string | null) ?? null}
+        pausedReasonCode={(campaign.paused_reason_code as string | null) ?? null}
+        pausedReasonMessage={(campaign.paused_reason_message as string | null) ?? null}
+        incidents={(incidents ?? []) as CampaignIncidentRow[]}
+        events={(campaignEvents ?? []) as CampaignEventRow[]}
+      />
 
       {/* Delivery analytics */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">

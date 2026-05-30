@@ -19,15 +19,25 @@ export async function shortenUrl(
 ): Promise<string> {
   const supabase = await createClient();
 
-  // Remove previous short_links rows for this campaign from the DB so only one
-  // appears in analytics. We intentionally leave the Redis redirect keys intact
-  // — old codes already sent in SMS messages must keep resolving.
-  await supabase.from("short_links").delete().eq("campaign_id", campaignId);
+  // Reuse existing short link for the same campaign + destination URL.
+  // This keeps per-link analytics and avoids deleting older campaign links.
+  const { data: existing, error: existingErr } = await supabase
+    .from("short_links")
+    .select("code")
+    .eq("campaign_id", campaignId)
+    .eq("original_url", originalUrl)
+    .limit(1)
+    .maybeSingle();
+  if (existingErr) throw existingErr;
+  if (existing?.code) {
+    await redis.set(`link:${existing.code}`, originalUrl);
+    return existing.code as string;
+  }
 
   let code = generateCode();
 
-  // Ensure uniqueness — retry up to 5 times on collision
-  for (let attempt = 0; attempt < 5; attempt++) {
+  // Ensure uniqueness — retry up to 20 times on collision
+  for (let attempt = 0; attempt < 20; attempt++) {
     const taken = await redis.get(`link:${code}`);
     if (!taken) break;
     code = generateCode();
@@ -37,12 +47,13 @@ export async function shortenUrl(
   await redis.set(`link:${code}`, originalUrl);
 
   // Write to Supabase for analytics
-  await supabase.from("short_links").insert({
+  const { error: insErr } = await supabase.from("short_links").insert({
     code,
     original_url: originalUrl,
     campaign_id: campaignId,
     user_id: userId,
   });
+  if (insErr) throw insErr;
 
   return code;
 }

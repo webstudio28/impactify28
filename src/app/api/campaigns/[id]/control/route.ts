@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { toCanonicalStatus, transitionCampaign } from "@/lib/campaigns/state-machine";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -32,27 +33,23 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const action = body.action;
   if (action === "pause") {
-    if (campaign.status !== "running" && campaign.status !== "queued") {
+    const canonical = toCanonicalStatus(campaign.status as string);
+    if (canonical !== "in_progress") {
       return NextResponse.json({ error: "Only active sends can be paused" }, { status: 400 });
     }
-    const { error } = await supabase
-      .from("campaigns")
-      .update({ status: "paused", updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, status: "paused" });
+    const t = await transitionCampaign(supabase, id, "paused_user", { actor: "user" });
+    if (!t.ok) return NextResponse.json({ error: t.error }, { status: 400 });
+    return NextResponse.json({ ok: true, status: "paused_user" });
   }
 
   if (action === "resume") {
-    if (campaign.status !== "paused") {
+    const canonical = toCanonicalStatus(campaign.status as string);
+    if (canonical !== "paused_user") {
       return NextResponse.json({ error: "Only paused campaigns can be resumed" }, { status: 400 });
     }
-    const { error } = await supabase
-      .from("campaigns")
-      .update({ status: "running", updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, status: "running" });
+    const t = await transitionCampaign(supabase, id, "in_progress", { actor: "user" });
+    if (!t.ok) return NextResponse.json({ error: t.error }, { status: 400 });
+    return NextResponse.json({ ok: true, status: "in_progress" });
   }
 
   return NextResponse.json({ error: "action must be pause or resume" }, { status: 400 });

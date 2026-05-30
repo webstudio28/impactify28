@@ -3,14 +3,24 @@
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  canShowResults,
+  isCampaignLiveStatus,
+  isPausedBySystem,
+  toCanonicalStatus,
+} from "@/lib/campaigns/status-client";
 
 export type CampaignRow = {
   id: string;
   name: string;
   status: string;
+  channel?: string;
   created_at: string;
   scheduled_at: string | null;
   moderation_note?: string | null;
+  started_at?: string | null;
+  paused_by?: string | null;
+  paused_reason_message?: string | null;
 };
 
 type OutboundMsg = {
@@ -129,14 +139,25 @@ export function CampaignsTable({
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [startBusyId, setStartBusyId] = useState<string | null>(null);
 
-  async function control(id: string, action: "pause" | "resume") {
+  async function pauseCampaign(id: string) {
     setBusyId(id);
     try {
-      const res = await fetch(`/api/campaigns/${id}/control`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
+      const res = await fetch(`/api/campaigns/${id}/pause`, { method: "POST" });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        alert(j.error ?? tm("controlError"));
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function continueCampaign(id: string) {
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/continue`, { method: "POST" });
       if (!res.ok) {
         const j = (await res.json()) as { error?: string };
         alert(j.error ?? tm("controlError"));
@@ -197,14 +218,23 @@ export function CampaignsTable({
     return tm("buttonLive");
   }
 
-  const sendLifecycleStatuses = new Set([
-    "running",
-    "paused",
-    "queued",
-    "completed",
-    "failed",
-    "cancelled",
-  ]);
+  function channelBadge(channel?: string) {
+    if (channel === "email") {
+      return (
+        <span className="inline-flex w-fit rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-900">
+          {t("typeEmail")}
+        </span>
+      );
+    }
+    if (channel === "sms") {
+      return (
+        <span className="inline-flex w-fit rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-900">
+          {t("typeSms")}
+        </span>
+      );
+    }
+    return <span className="text-xs text-ink-muted">{t("dash")}</span>;
+  }
 
   function renderStatus(c: CampaignRow) {
     if (c.status === "draft") {
@@ -244,6 +274,33 @@ export function CampaignsTable({
         </span>
       );
     }
+    const canonical = toCanonicalStatus(c.status);
+    if (canonical === "in_progress" || c.status === "running" || c.status === "queued") {
+      return (
+        <span className="inline-flex w-fit rounded-md border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-900">
+          {t("statusInProgress")}
+        </span>
+      );
+    }
+    if (canonical === "paused_user" || (c.status === "paused" && !isPausedBySystem(c))) {
+      return (
+        <span className="inline-flex w-fit rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900">
+          {t("statusPaused")}
+        </span>
+      );
+    }
+    if (isPausedBySystem(c)) {
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex w-fit rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800">
+            {t("statusPausedSystem")}
+          </span>
+          {c.paused_reason_message ? (
+            <span className="max-w-xs text-xs text-ink-muted">{c.paused_reason_message}</span>
+          ) : null}
+        </div>
+      );
+    }
     return <span className="capitalize">{c.status}</span>;
   }
 
@@ -254,6 +311,7 @@ export function CampaignsTable({
           <thead className="border-b border-zinc-100 bg-surface-muted text-xs uppercase tracking-wide text-ink-muted">
             <tr>
               <th className="px-4 py-3 font-medium">{t("colName")}</th>
+              <th className="px-4 py-3 font-medium">{t("colType")}</th>
               <th className="px-4 py-3 font-medium">{t("colStatus")}</th>
               <th className="px-4 py-3 font-medium">{t("colSchedule")}</th>
               <th className="px-4 py-3 font-medium">{t("colCreated")}</th>
@@ -263,7 +321,7 @@ export function CampaignsTable({
           <tbody>
             {campaigns.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-ink-muted">
+                <td colSpan={6} className="px-4 py-10 text-center text-ink-muted">
                   {t("empty")}{" "}
                   <Link href="/dashboard/campaigns/new" className="font-medium text-accent hover:text-accent-hover">
                     {t("createOne")}
@@ -283,6 +341,7 @@ export function CampaignsTable({
                       <p className="mt-1 text-xs text-ink-muted">{t("rejectedPleaseEdit")}</p>
                     ) : null}
                   </td>
+                  <td className="px-4 py-3 text-ink-muted">{channelBadge(c.channel)}</td>
                   <td className="px-4 py-3 text-ink-muted">{renderStatus(c)}</td>
                   <td className="px-4 py-3 text-ink-muted">
                     {c.scheduled_at ? formatAppDate(c.scheduled_at, locale, "datetime") : dash}
@@ -318,54 +377,68 @@ export function CampaignsTable({
                           {startBusyId === c.id ? t("startingCampaign") : t("startCampaign")}
                         </button>
                       ) : null}
-                      {sendLifecycleStatuses.has(c.status) ? (
+                      {isCampaignLiveStatus(c.status) ? (
+                        <button
+                          type="button"
+                          disabled={busyId === c.id}
+                          onClick={() => void pauseCampaign(c.id)}
+                          className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
+                        >
+                          {tm("pause")}
+                        </button>
+                      ) : null}
+                      {toCanonicalStatus(c.status) === "paused_user" ||
+                      (c.status === "paused" && !isPausedBySystem(c)) ? (
+                        <button
+                          type="button"
+                          disabled={busyId === c.id}
+                          onClick={() => void continueCampaign(c.id)}
+                          className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
+                        >
+                          {tm("resume")}
+                        </button>
+                      ) : null}
+                      {isPausedBySystem(c) ? (
+                        <button
+                          type="button"
+                          disabled
+                          title={c.paused_reason_message ?? t("pausedSystemTooltip")}
+                          className="inline-flex cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-ink-muted opacity-70"
+                        >
+                          {tm("resume")}
+                        </button>
+                      ) : null}
+                      {canShowResults(c) ? (
                         <>
-                          {c.status === "running" || c.status === "queued" ? (
-                            <button
-                              type="button"
-                              disabled={busyId === c.id}
-                              onClick={() => void control(c.id, "pause")}
-                              className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
-                            >
-                              {tm("pause")}
-                            </button>
-                          ) : null}
-                          {c.status === "paused" ? (
-                            <button
-                              type="button"
-                              disabled={busyId === c.id}
-                              onClick={() => void control(c.id, "resume")}
-                              className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
-                            >
-                              {tm("resume")}
-                            </button>
-                          ) : null}
+                          <Link
+                            href={`/dashboard/campaigns/${c.id}/analytics`}
+                            className="inline-flex rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-accent-hover"
+                          >
+                            {t("results")}
+                          </Link>
                           <button
                             type="button"
                             onClick={() => openMonitor(c)}
-                            className="inline-flex rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-accent-hover"
+                            className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"
                           >
                             {resultsLabel(c.status)}
                           </button>
-                          <Link
-                            href={`/dashboard/campaigns/${c.id}/analytics`}
-                            className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"
-                          >
-                            {t("analytics")}
-                          </Link>
                         </>
                       ) : null}
-                      <button
-                        type="button"
-                        disabled={deleteBusyId === c.id}
-                        onClick={() => {
-                          if (monitorId === c.id) setMonitorId(null);
-                          setDeleteTarget({ id: c.id, name: c.name });
-                        }}
-                        className="inline-flex rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
-                      >
-                        {deleteBusyId === c.id ? t("deleting") : t("delete")}
-                      </button>
+                      {toCanonicalStatus(c.status) === "paused_user" ||
+                      (c.status === "paused" && !isPausedBySystem(c)) ? (
+                        <button
+                          type="button"
+                          disabled={deleteBusyId === c.id}
+                          onClick={() => {
+                            if (monitorId === c.id) setMonitorId(null);
+                            setDeleteTarget({ id: c.id, name: c.name });
+                          }}
+                          className="inline-flex rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {deleteBusyId === c.id ? t("deleting") : t("delete")}
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -471,7 +544,12 @@ function MonitorModal({
 
   const campaignStatus = data?.campaign.status;
   const isLivePolling =
-    campaignStatus === "running" || campaignStatus === "paused" || campaignStatus === "queued";
+    campaignStatus === "running" ||
+    campaignStatus === "paused" ||
+    campaignStatus === "queued" ||
+    campaignStatus === "in_progress" ||
+    campaignStatus === "paused_user" ||
+    campaignStatus === "paused_system";
 
   useEffect(() => {
     if (!isLivePolling) return;
@@ -484,7 +562,13 @@ function MonitorModal({
       if (cancelled || !pack.ok) return;
 
       const st = pack.data.campaign.status;
-      const live = st === "running" || st === "paused" || st === "queued";
+      const live =
+        st === "running" ||
+        st === "paused" ||
+        st === "queued" ||
+        st === "in_progress" ||
+        st === "paused_user" ||
+        st === "paused_system";
 
       if (userPagedRef.current) {
         setData((prev) => {
@@ -511,12 +595,7 @@ function MonitorModal({
   }, [campaignId, filter, isLivePolling, applyPayloadRowMerge]);
 
   const isEmail = data?.channel === "email";
-  const titleLive = Boolean(
-    data &&
-      (data.campaign.status === "running" ||
-        data.campaign.status === "paused" ||
-        data.campaign.status === "queued")
-  );
+  const titleLive = Boolean(data && isCampaignLiveStatus(data.campaign.status));
   const modalTitle = titleLive ? tm("titleLive") : (isEmail ? tm("titleDoneEmail") : tm("titleDone"));
 
   async function loadMore() {

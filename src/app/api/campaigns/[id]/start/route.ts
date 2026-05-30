@@ -3,15 +3,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { executeCampaignLaunch } from "@/lib/campaigns/execute-launch";
-import { processDueOutboundEmail } from "@/lib/campaigns/process-email-queue";
-import { processDueOutboundSms } from "@/lib/campaigns/process-queue";
-import { syncQueuedCampaignsToCompleted } from "@/lib/campaigns/sync-status";
+import { processCampaignBatchFallback } from "@/lib/campaigns/fallback-process";
+import { isQStashConfigured } from "@/lib/qstash";
 import {
   emailFailureTicketContext,
   explainResendSendFailure,
   getInvalidPlatformFromWarning,
 } from "@/lib/email/resend-errors";
-import { createTicket, createSendBatchTickets } from "@/lib/tickets/create-ticket";
+import { createTicket } from "@/lib/tickets/create-ticket";
+import { transitionCampaign, toCanonicalStatus, toStoredStatus } from "@/lib/campaigns/state-machine";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -59,7 +59,7 @@ async function runBackgroundLaunch(
     if (!result.ok) {
       await supabase
         .from("campaigns")
-        .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
+        .update({ status: toStoredStatus("ready"), updated_at: new Date().toISOString() })
         .eq("id", campaignId);
 
       if ("ticketed" in result && result.ticketed) return;
@@ -75,108 +75,75 @@ async function runBackgroundLaunch(
       return;
     }
 
-    if (channel === "email") {
-      const email = await processDueOutboundEmail(supabase, { limit: 50 });
-      await syncQueuedCampaignsToCompleted(supabase, email.campaignIds);
+    const ch = channel === "email" ? "email" : "sms";
 
-      if (email.campaignSummaries.length > 0 && email.processed === 0) {
-        await supabase
-          .from("campaigns")
-          .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
-          .eq("id", campaignId);
+    if (!isQStashConfigured()) {
+      const batch = await processCampaignBatchFallback(supabase, campaignId, ch);
+      if (batch.processed === 0 && ch === "email") {
+        const { data: failedSample } = await supabase
+          .from("outbound_email")
+          .select("error_message")
+          .eq("campaign_id", campaignId)
+          .eq("status", "failed")
+          .limit(1)
+          .maybeSingle();
 
-        const rawError = email.campaignSummaries[0]?.sampleErrors[0] ?? email.errors[0] ?? "Unknown send error";
-        const platformFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
+        if (failedSample?.error_message) {
+          await supabase
+            .from("campaigns")
+            .update({ status: toStoredStatus("ready"), updated_at: new Date().toISOString() })
+            .eq("id", campaignId);
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("sender_email, sender_display_name, business_name")
-          .eq("id", userId)
-          .single();
+          const rawError = failedSample.error_message as string;
+          const platformFrom = process.env.RESEND_FROM_EMAIL?.trim() || null;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("sender_email, sender_display_name, business_name")
+            .eq("id", userId)
+            .single();
 
-        const replyTo = (profile?.sender_email as string | null)?.trim() || null;
-        const displayName =
-          (profile?.sender_display_name as string | null)?.trim() ||
-          (profile?.business_name as string | null)?.trim() ||
-          null;
-        const fromHeader = platformFrom
-          ? displayName
-            ? `${displayName} <${platformFrom}>`
-            : platformFrom
-          : null;
+          const replyTo = (profile?.sender_email as string | null)?.trim() || null;
+          const displayName =
+            (profile?.sender_display_name as string | null)?.trim() ||
+            (profile?.business_name as string | null)?.trim() ||
+            null;
+          const fromHeader = platformFrom
+            ? displayName
+              ? `${displayName} <${platformFrom}>`
+              : platformFrom
+            : null;
 
-        const clearMessage = explainResendSendFailure(rawError, {
-          platformFrom,
-          fromHeader,
-          replyTo,
-        });
-        const kind = isDomainError(rawError) ? "critical" : "error";
-
-        await createTicket({
-          kind,
-          title: `${kind === "critical" ? "Platform sender not verified in Resend" : "All emails failed"} — ${campaignName}`,
-          message: clearMessage,
-          userId,
-          campaignId,
-          context: emailFailureTicketContext({
+          const clearMessage = explainResendSendFailure(rawError, {
             platformFrom,
             fromHeader,
             replyTo,
-            campaignName,
-            sent: email.processed,
-            failed: email.errors.length,
-            sampleErrors: email.campaignSummaries[0]?.sampleErrors ?? email.errors.slice(0, 5),
-          }),
-        });
-        return;
+          });
+          const kind = isDomainError(rawError) ? "critical" : "error";
+
+          await createTicket({
+            kind,
+            title: `${kind === "critical" ? "Platform sender not verified in Resend" : "All emails failed"} — ${campaignName}`,
+            message: clearMessage,
+            userId,
+            campaignId,
+            context: emailFailureTicketContext({
+              platformFrom,
+              fromHeader,
+              replyTo,
+              campaignName,
+              sent: 0,
+              failed: 1,
+              sampleErrors: [rawError],
+            }),
+          });
+        }
       }
-
-      void createSendBatchTickets(email.campaignSummaries, "email");
-    } else if (channel === "sms") {
-      const sms = await processDueOutboundSms(supabase, { limit: 50 });
-      await syncQueuedCampaignsToCompleted(supabase, sms.campaignIds);
-
-      if (sms.providerError) {
-        await supabase
-          .from("campaigns")
-          .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
-          .eq("id", campaignId);
-        await createTicket({
-          kind: "critical",
-          title: `SMS provider not configured — ${campaignName}`,
-          message: sms.providerError,
-          userId,
-          campaignId,
-          context: { campaignName, channel: "sms", source: "background-launch" },
-          deduplicate: true,
-        });
-        return;
-      }
-
-      if (sms.campaignSummaries.length > 0 && sms.processed === 0) {
-        await supabase
-          .from("campaigns")
-          .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
-          .eq("id", campaignId);
-        const firstError = sms.campaignSummaries[0]?.sampleErrors[0] ?? sms.errors[0] ?? "Unknown error";
-        await createTicket({
-          kind: "error",
-          title: `All SMS failed — ${campaignName}`,
-          message: firstError,
-          userId,
-          campaignId,
-          context: { campaignName, channel: "sms", sampleErrors: sms.errors.slice(0, 5) },
-        });
-        return;
-      }
-
-      void createSendBatchTickets(sms.campaignSummaries, "sms");
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Launch failed";
     await supabase
       .from("campaigns")
-      .update({ status: "ready_to_launch", updated_at: new Date().toISOString() })
+      .update({ status: toStoredStatus("ready"), updated_at: new Date().toISOString() })
       .eq("id", campaignId);
     await createTicket({
       kind: "error",
@@ -205,7 +172,8 @@ export async function POST(_req: Request, ctx: Ctx) {
 
   if (qErr || !row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (row.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  if (row.status !== "ready_to_launch") {
+  const canonical = toCanonicalStatus(row.status as string);
+  if (canonical !== "ready") {
     return NextResponse.json({ error: "Campaign is not ready to start" }, { status: 400 });
   }
 
@@ -244,30 +212,14 @@ export async function POST(_req: Request, ctx: Ctx) {
     }
   }
 
-  // Claim campaign → running immediately so the UI can refresh
-  const { data: claimed, error: claimErr } = await supabase
-    .from("campaigns")
-    .update({
-      status: "running",
-      send_rate_minute: null,
-      send_rate_count: 0,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("status", "ready_to_launch")
-    .select("id")
-    .maybeSingle();
-
-  if (claimErr) return NextResponse.json({ error: claimErr.message }, { status: 500 });
-  if (!claimed) {
-    return NextResponse.json({ error: "Campaign is not ready to start" }, { status: 400 });
-  }
+  const transitioned = await transitionCampaign(supabase, id, "in_progress", { actor: "user" });
+  if (!transitioned.ok) return NextResponse.json({ error: transitioned.error }, { status: 400 });
 
   after(() => runBackgroundLaunch(id, user.id, channel, campaignName));
 
   return NextResponse.json({
     ok: true,
-    status: "running",
+    status: "in_progress",
     background: true,
     message: "Campaign started. Queueing and sending continue in the background — use Monitor for progress.",
   });

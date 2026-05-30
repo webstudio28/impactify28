@@ -14,11 +14,13 @@ export default async function CampaignsPage({
   const supabase = await createClient();
   const { data: campaigns, error: listError } = await supabase
     .from("campaigns")
-    .select("id, name, status, created_at, scheduled_at, moderation_note")
+    .select("id, name, status, channel, created_at, scheduled_at, moderation_note, started_at, paused_by, paused_reason_message")
     .order("created_at", { ascending: false });
 
   const list = campaigns ?? [];
-  const needsAutoSend = list.some((c) => c.status === "running" || c.status === "queued");
+  const needsAutoSend = list.some(
+    (c) => c.status === "running" || c.status === "queued" || c.status === "in_progress"
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">

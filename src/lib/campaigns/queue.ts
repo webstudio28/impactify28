@@ -77,7 +77,7 @@ export async function enqueueCampaignEmail(
     startAt: Date;
   }
 ): Promise<{ inserted: number }> {
-  const { userId, campaignId, recipients, subject, htmlBody, startAt } = params;
+  const { userId, campaignId, recipients, startAt } = params;
   const runAt = startAt.toISOString();
   const seen = new Set<string>();
   const unique: string[] = [];
@@ -93,8 +93,10 @@ export async function enqueueCampaignEmail(
     user_id: userId,
     campaign_id: campaignId,
     to_email,
-    subject,
-    html_body: htmlBody,
+    // Transitional: canonical subject/html lives in campaigns.email_subject/email_html.
+    // Keep these placeholders until the DB columns are dropped in the next migration step.
+    subject: "",
+    html_body: "",
     run_at: runAt,
   }));
   if (!rows.length) return { inserted: 0 };
