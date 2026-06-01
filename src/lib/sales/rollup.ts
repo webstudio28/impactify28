@@ -56,18 +56,29 @@ export async function rollupCampaignSales(supabase: SupabaseClient): Promise<{
 
 export async function aggregateSalesForCampaign(
   supabase: SupabaseClient,
-  campaignId: string
+  campaignId: string,
+  userId?: string
 ): Promise<{
   conversionCount: number;
   revenueTotal: number;
   currency: string;
 } | null> {
-  const { data: events, error } = await supabase
+  let query = supabase
     .from("campaign_sales_events")
     .select("order_value, currency")
     .eq("campaign_id", campaignId);
 
-  if (error || !events?.length) return null;
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data: events, error } = await query;
+
+  if (error) {
+    console.error("[aggregateSalesForCampaign]", error.message, campaignId);
+    return null;
+  }
+  if (!events?.length) return null;
 
   let revenueTotal = 0;
   for (const row of events) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { aggregateSalesForCampaign } from "@/lib/sales/rollup";
 import { createCampaignSalesToken } from "@/lib/sales/campaign-token";
 
@@ -25,7 +26,14 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const live = await aggregateSalesForCampaign(supabase, id);
+  // Events are ingested with the service role; read via admin after ownership check.
+  let live: Awaited<ReturnType<typeof aggregateSalesForCampaign>> = null;
+  try {
+    const admin = createAdminClient();
+    live = await aggregateSalesForCampaign(admin, id, user.id);
+  } catch (e) {
+    console.error("[campaigns/sales]", e instanceof Error ? e.message : e);
+  }
 
   let conversionCount = 0;
   let revenueTotal = 0;
@@ -39,13 +47,26 @@ export async function GET(_req: Request, ctx: Ctx) {
     windowEnd = new Date().toISOString();
   }
 
-  const { data: rollup } = await supabase
-    .from("campaign_sales_rollups")
-    .select("conversion_count, revenue_total, window_end, updated_at")
-    .eq("campaign_id", id)
-    .order("window_end", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let rollup: {
+    conversion_count: number | null;
+    revenue_total: number | null;
+    window_end: string | null;
+    updated_at: string | null;
+  } | null = null;
+
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("campaign_sales_rollups")
+      .select("conversion_count, revenue_total, window_end, updated_at")
+      .eq("campaign_id", id)
+      .order("window_end", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    rollup = data;
+  } catch {
+    /* optional staleness hint */
+  }
 
   if (rollup?.window_end && !windowEnd) {
     windowEnd = rollup.window_end as string;
