@@ -4,15 +4,34 @@
   var COOKIE_NAME = "_imp_cmp";
   var COOKIE_DAYS = 7;
 
-  function currentScript() {
-    var scripts = document.getElementsByTagName("script");
-    return scripts[scripts.length - 1];
+  var WORKSPACE_ID = null;
+  var API_BASE = "";
+
+  function findTrackerScript() {
+    var script = document.currentScript;
+    if (script && script.src && script.src.indexOf("tracker.js") !== -1) return script;
+    var list = document.querySelectorAll('script[src*="tracker.js"]');
+    return list.length ? list[list.length - 1] : null;
   }
 
+  function initTrackerConfig() {
+    var script = findTrackerScript();
+    if (!script) return;
+    WORKSPACE_ID =
+      script.getAttribute("data-workspace") || script.getAttribute("data-workspace-id");
+    var src = script.src || script.getAttribute("src") || "";
+    if (!src) return;
+    try {
+      API_BASE = new URL(src, window.location.href).origin;
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  initTrackerConfig();
+
   function readWorkspaceId() {
-    var script = currentScript();
-    if (!script) return null;
-    return script.getAttribute("data-workspace") || script.getAttribute("data-workspace-id");
+    return WORKSPACE_ID;
   }
 
   function setCookie(name, value, days) {
@@ -48,18 +67,13 @@
   }
 
   function apiBase() {
-    var script = currentScript();
-    var src = script && script.src ? script.src : "";
-    if (!src) return "";
-    try {
-      var url = new URL(src);
-      return url.origin;
-    } catch (e) {
-      return "";
-    }
+    return API_BASE;
   }
 
   function trackConversion(payload) {
+    if (!readWorkspaceId() || !apiBase()) {
+      initTrackerConfig();
+    }
     var workspaceId = readWorkspaceId();
     if (!workspaceId) return Promise.resolve();
 
