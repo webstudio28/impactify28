@@ -25,6 +25,20 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const live = await aggregateSalesForCampaign(supabase, id);
+
+  let conversionCount = 0;
+  let revenueTotal = 0;
+  let currency = "BGN";
+  let windowEnd: string | null = null;
+
+  if (live) {
+    conversionCount = live.conversionCount;
+    revenueTotal = live.revenueTotal;
+    currency = live.currency;
+    windowEnd = new Date().toISOString();
+  }
+
   const { data: rollup } = await supabase
     .from("campaign_sales_rollups")
     .select("conversion_count, revenue_total, window_end, updated_at")
@@ -33,33 +47,8 @@ export async function GET(_req: Request, ctx: Ctx) {
     .limit(1)
     .maybeSingle();
 
-  let conversionCount = 0;
-  let revenueTotal = 0;
-  let currency = "BGN";
-  let windowEnd: string | null = null;
-
-  if (rollup) {
-    conversionCount = Number(rollup.conversion_count ?? 0);
-    revenueTotal = Number(rollup.revenue_total ?? 0);
-    windowEnd = (rollup.window_end as string) ?? null;
-  } else {
-    const live = await aggregateSalesForCampaign(supabase, id);
-    if (live) {
-      conversionCount = live.conversionCount;
-      revenueTotal = live.revenueTotal;
-      currency = live.currency;
-      windowEnd = new Date().toISOString();
-    }
-  }
-
-  if (rollup) {
-    const { data: sample } = await supabase
-      .from("campaign_sales_events")
-      .select("currency")
-      .eq("campaign_id", id)
-      .limit(1)
-      .maybeSingle();
-    if (sample?.currency) currency = sample.currency as string;
+  if (rollup?.window_end && !windowEnd) {
+    windowEnd = rollup.window_end as string;
   }
 
   const windowEndMs = windowEnd ? new Date(windowEnd).getTime() : 0;
