@@ -1,5 +1,6 @@
 import { redis } from "@/lib/redis";
 import { createClient } from "@/lib/supabase/server";
+import { appendCampaignSalesParam } from "@/lib/sales/attribution";
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const CODE_LENGTH = 6;
@@ -18,6 +19,7 @@ export async function shortenUrl(
   userId: string
 ): Promise<string> {
   const supabase = await createClient();
+  const destinationUrl = appendCampaignSalesParam(originalUrl, campaignId, userId);
 
   // Reuse existing short link for the same campaign + destination URL.
   // This keeps per-link analytics and avoids deleting older campaign links.
@@ -25,12 +27,12 @@ export async function shortenUrl(
     .from("short_links")
     .select("code")
     .eq("campaign_id", campaignId)
-    .eq("original_url", originalUrl)
+    .eq("original_url", destinationUrl)
     .limit(1)
     .maybeSingle();
   if (existingErr) throw existingErr;
   if (existing?.code) {
-    await redis.set(`link:${existing.code}`, originalUrl);
+    await redis.set(`link:${existing.code}`, destinationUrl);
     return existing.code as string;
   }
 
@@ -44,12 +46,12 @@ export async function shortenUrl(
   }
 
   // Write to Redis — no expiry, links are permanent
-  await redis.set(`link:${code}`, originalUrl);
+  await redis.set(`link:${code}`, destinationUrl);
 
   // Write to Supabase for analytics
   const { error: insErr } = await supabase.from("short_links").insert({
     code,
-    original_url: originalUrl,
+    original_url: destinationUrl,
     campaign_id: campaignId,
     user_id: userId,
   });

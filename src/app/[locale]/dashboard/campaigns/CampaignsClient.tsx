@@ -9,6 +9,7 @@ import {
   isPausedBySystem,
   toCanonicalStatus,
 } from "@/lib/campaigns/status-client";
+import { campaignDeleteNeedsRunningConfirm } from "@/lib/campaigns/status-client";
 import { ButtonSpinner } from "@/components/ui/ButtonSpinner";
 
 export type CampaignRow = {
@@ -136,7 +137,12 @@ export function CampaignsTable({
   const router = useRouter();
   const [monitorId, setMonitorId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+    status: string;
+    phase: "running_warning" | "confirm";
+  } | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [startBusyId, setStartBusyId] = useState<string | null>(null);
 
@@ -172,6 +178,16 @@ export function CampaignsTable({
 
   function openMonitor(c: CampaignRow) {
     setMonitorId(c.id);
+  }
+
+  function openDelete(c: CampaignRow) {
+    if (monitorId === c.id) setMonitorId(null);
+    setDeleteTarget({
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      phase: campaignDeleteNeedsRunningConfirm(c.status) ? "running_warning" : "confirm",
+    });
   }
 
   async function confirmDelete() {
@@ -447,27 +463,21 @@ export function CampaignsTable({
                           </button>
                         </>
                       ) : null}
-                      {toCanonicalStatus(c.status) === "paused_user" ||
-                      (c.status === "paused" && !isPausedBySystem(c)) ? (
-                        <button
-                          type="button"
-                          disabled={deleteBusyId === c.id}
-                          onClick={() => {
-                            if (monitorId === c.id) setMonitorId(null);
-                            setDeleteTarget({ id: c.id, name: c.name });
-                          }}
-                          className="inline-flex rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
-                        >
-                          {deleteBusyId === c.id ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <ButtonSpinner />
-                              {t("deleting")}
-                            </span>
-                          ) : (
-                            t("delete")
-                          )}
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        disabled={deleteBusyId === c.id}
+                        onClick={() => openDelete(c)}
+                        className="inline-flex rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deleteBusyId === c.id ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <ButtonSpinner />
+                            {t("deleting")}
+                          </span>
+                        ) : (
+                          t("delete")
+                        )}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -492,35 +502,74 @@ export function CampaignsTable({
           }}
         >
           <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
-            <h2 id="delete-campaign-title" className="text-base font-semibold text-ink">
-              {t("deleteConfirmTitle")}
-            </h2>
-            <p className="mt-3 text-sm text-ink-muted">{t("deleteConfirmBody", { name: deleteTarget.name })}</p>
-            <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                disabled={Boolean(deleteBusyId)}
-                onClick={() => setDeleteTarget(null)}
-                className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
-              >
-                {t("deleteConfirmCancel")}
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(deleteBusyId)}
-                onClick={() => void confirmDelete()}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
-              >
-                {deleteBusyId ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <ButtonSpinner />
-                    {t("deleting")}
-                  </span>
-                ) : (
-                  t("deleteConfirmSubmit")
-                )}
-              </button>
-            </div>
+            {deleteTarget.phase === "running_warning" ? (
+              <>
+                <h2 id="delete-campaign-title" className="text-base font-semibold text-ink">
+                  {t("deleteRunningTitle")}
+                </h2>
+                <p className="mt-3 text-sm text-ink-muted">
+                  {t("deleteRunningBody", { name: deleteTarget.name })}
+                </p>
+                <div className="mt-6 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted"
+                  >
+                    {t("deleteConfirmCancel")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDeleteTarget((prev) =>
+                        prev ? { ...prev, phase: "confirm" as const } : prev
+                      )
+                    }
+                    className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700"
+                  >
+                    {t("deleteRunningContinue")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 id="delete-campaign-title" className="text-base font-semibold text-ink">
+                  {campaignDeleteNeedsRunningConfirm(deleteTarget.status)
+                    ? t("deleteRunningFinalTitle")
+                    : t("deleteConfirmTitle")}
+                </h2>
+                <p className="mt-3 text-sm text-ink-muted">
+                  {campaignDeleteNeedsRunningConfirm(deleteTarget.status)
+                    ? t("deleteRunningFinalBody", { name: deleteTarget.name })
+                    : t("deleteConfirmBody", { name: deleteTarget.name })}
+                </p>
+                <div className="mt-6 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={Boolean(deleteBusyId)}
+                    onClick={() => setDeleteTarget(null)}
+                    className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
+                  >
+                    {t("deleteConfirmCancel")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(deleteBusyId)}
+                    onClick={() => void confirmDelete()}
+                    className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleteBusyId ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <ButtonSpinner />
+                        {t("deleting")}
+                      </span>
+                    ) : (
+                      t("deleteConfirmSubmit")
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}

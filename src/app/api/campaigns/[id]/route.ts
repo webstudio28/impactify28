@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { EMAIL_FONTS } from "@/lib/email/fonts";
-import { toCanonicalStatus, transitionCampaign } from "@/lib/campaigns/state-machine";
+import { deleteUserCampaign } from "@/lib/campaigns/delete-campaign";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -181,42 +180,14 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   if (campaignErr || !campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!isAdmin && campaign.user_id !== user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const canonical = toCanonicalStatus(campaign.status as string);
-  if (canonical === "paused_user") {
-    const transitioned = await transitionCampaign(supabase, id, "cancelled", { actor: isAdmin ? "admin" : "user" });
-    if (!transitioned.ok) return NextResponse.json({ error: transitioned.error }, { status: 400 });
-    return NextResponse.json({ ok: true, status: transitioned.status });
+  const result = await deleteUserCampaign(supabase, id, { isAdmin });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.httpStatus ?? 400 });
   }
 
-  // Backward compatibility: allow hard delete for draft/rejected via existing endpoint.
-  if (canonical !== "draft" && campaign.status !== "rejected") {
-    return NextResponse.json(
-      { error: "Only draft/rejected campaigns can be deleted directly. Pause campaign first to cancel it." },
-      { status: 400 }
-    );
-  }
-
-  let data: { id: string }[] | null = null;
-  let error: { message: string } | null = null;
-
-  try {
-    const client = isAdmin ? createAdminClient() : supabase;
-    const res = await client.from("campaigns").delete().eq("id", id).select("id");
-    data = res.data;
-    error = res.error;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Server error";
-    if (isAdmin && msg.includes("SUPABASE_SERVICE_ROLE_KEY")) {
-      return NextResponse.json(
-        { error: "Admin campaign delete requires SUPABASE_SERVICE_ROLE_KEY on the server." },
-        { status: 503 }
-      );
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data?.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    action: result.action,
+    ...(result.status ? { status: result.status } : {}),
+  });
 }

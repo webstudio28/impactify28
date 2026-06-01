@@ -5,6 +5,7 @@ import {
   buildViewInBrowserUrl,
   createTrackingToken,
 } from "@/lib/email/tracking";
+import { appendCampaignSalesParam } from "@/lib/sales/attribution";
 
 function escapeHtml(value: string): string {
   return value
@@ -32,18 +33,20 @@ function shouldSkipHref(href: string): boolean {
 function rewriteLinks(
   html: string,
   recipientId: string,
-  campaignId: string
+  campaignId: string,
+  userId: string
 ): string {
   return html.replace(/href=(["'])(.*?)\1/gi, (_match, quote: string, hrefRaw: string) => {
     const href = hrefRaw.trim();
     if (shouldSkipHref(href)) {
       return `href=${quote}${escapeHtml(hrefRaw)}${quote}`;
     }
+    const storeUrl = appendCampaignSalesParam(href, campaignId, userId);
     const token = createTrackingToken({
       kind: "click",
       recipientId,
       campaignId,
-      targetUrl: href,
+      targetUrl: storeUrl,
       expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     });
     const tracked = buildClickRedirectUrl(token);
@@ -82,9 +85,10 @@ export function injectTrackingForEmail(params: {
   html: string;
   recipientId: string;
   campaignId: string;
+  userId: string;
 }): string {
   const withBody = withBodyFallback(params.html);
-  const rewritten = rewriteLinks(withBody, params.recipientId, params.campaignId);
+  const rewritten = rewriteLinks(withBody, params.recipientId, params.campaignId, params.userId);
 
   const openToken = createTrackingToken({
     kind: "open",

@@ -7,6 +7,10 @@ export function isCampaignLiveStatus(status: string): boolean {
   return canonical === "in_progress" || status === "running" || status === "queued";
 }
 
+export function campaignDeleteNeedsRunningConfirm(status: string): boolean {
+  return isCampaignLiveStatus(status);
+}
+
 export function canShowResults(campaign: {
   started_at?: string | null;
   status: string;

@@ -256,12 +256,7 @@ export function AnalyticsClient({ campaignId }: { campaignId: string }) {
                 {t("salesStale", { hours: hoursSince(sales.windowEnd) })}
               </p>
             ) : null}
-            {sales.campaignToken ? (
-              <p className="text-xs text-ink-muted">
-                {t("salesCmpHint")}{" "}
-                <code className="rounded bg-zinc-100 px-1 py-0.5 text-[11px]">?cmp={sales.campaignToken}</code>
-              </p>
-            ) : null}
+            <p className="text-xs text-ink-muted">{t("salesAttributionNote")}</p>
           </div>
         ) : (
           <p className="mt-3 text-sm text-ink-muted">{t("salesEmpty")}</p>

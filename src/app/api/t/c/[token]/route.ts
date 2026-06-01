@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractShortCodeFromUrl, verifyTrackingToken } from "@/lib/email/tracking";
 import { incrementLiveMetric, logCampaignEvent } from "@/lib/campaigns/event-metrics";
+import { appendCampaignSalesParam } from "@/lib/sales/attribution";
 import { redis } from "@/lib/redis";
 
 type Ctx = { params: Promise<{ token: string }> };
@@ -17,12 +18,21 @@ export async function GET(_req: Request, ctx: Ctx) {
     return fallbackRedirect();
   }
 
-  const target = parsed.payload.u;
+  let target = parsed.payload.u;
   if (!URL.canParse(target)) return fallbackRedirect();
 
   try {
     const supabase = createAdminClient();
     const { payload } = parsed;
+
+    const { data: camp } = await supabase
+      .from("campaigns")
+      .select("user_id")
+      .eq("id", payload.cid)
+      .maybeSingle();
+    if (camp?.user_id) {
+      target = appendCampaignSalesParam(target, payload.cid, camp.user_id as string);
+    }
     await logCampaignEvent(supabase, {
       campaignId: payload.cid,
       recipientId: payload.rid,

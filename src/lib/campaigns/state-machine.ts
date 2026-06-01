@@ -21,6 +21,7 @@ type TransitionOptions = {
 const LEGACY_TO_CANONICAL: Record<string, CampaignCanonicalStatus> = {
   ready_to_launch: "ready",
   running: "in_progress",
+  queued: "in_progress",
   paused: "paused_user",
 };
 
@@ -35,7 +36,7 @@ const ALLOWED_TRANSITIONS: Record<CampaignCanonicalStatus, CampaignCanonicalStat
   ready: ["in_progress"],
   in_progress: ["paused_user", "paused_system", "completed", "failed_terminal"],
   paused_user: ["in_progress", "cancelled"],
-  paused_system: ["in_progress"],
+  paused_system: ["in_progress", "cancelled"],
   completed: [],
   cancelled: [],
   failed_terminal: [],

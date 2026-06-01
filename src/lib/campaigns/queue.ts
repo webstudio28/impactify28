@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { composeSmsBody } from "@/lib/sms/body";
+import { appendCampaignSalesParam } from "@/lib/sales/attribution";
 
 export type CampaignStepRow = {
   step_order: number;
@@ -41,7 +42,11 @@ export async function enqueueCampaignSms(
     let runAt = new Date(startAt.getTime());
     for (const step of ordered) {
       runAt = addHours(runAt, step.delay_after_previous_hours ?? 0);
-      const body = composeSmsBody(step.body, step.link_url);
+      const link =
+        step.link_url?.trim() ?
+          appendCampaignSalesParam(step.link_url.trim(), campaignId, userId)
+        : null;
+      const body = composeSmsBody(step.body, link);
       if (!body.trim()) continue;
       rows.push({
         user_id: userId,

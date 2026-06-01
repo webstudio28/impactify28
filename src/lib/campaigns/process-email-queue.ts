@@ -397,6 +397,7 @@ export async function processDueOutboundEmail(
           html: content.html,
           recipientId: row.id as string,
           campaignId,
+          userId: uid,
         }),
       });
       }

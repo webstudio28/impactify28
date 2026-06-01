@@ -30,6 +30,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: "/dashboard" as const, label: t("overview") },
     { href: "/dashboard/audience" as const, label: t("audience") },
     { href: "/dashboard/campaigns" as const, label: t("campaigns") },
+    { href: "/dashboard/tracker" as const, label: t("salesTracker") },
     { href: "/dashboard/campaigns/new" as const, label: t("newCampaign") },
   ];
 
