@@ -8,6 +8,7 @@ import { composeSmsBody } from "@/lib/sms/body";
 import { isOurShortUrl } from "@/lib/links/short-domain";
 import type { EmailTemplateType, EmailTemplateData } from "@/lib/email/templates/types";
 import { parseTemplateData } from "@/lib/email/templates/render";
+import { AudienceCreateModal, type AudienceCreateResult } from "./AudienceCreateModal";
 import { EmailBuilderStep } from "./EmailBuilderStep";
 
 type Audience = { id: string; name: string; audience_type: string };
@@ -199,8 +200,22 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
   const [emailInitialFont, setEmailInitialFont] = useState<string | null>(null);
   const [emailInitialEmphasis, setEmailInitialEmphasis] = useState<string | null>(null);
   const [emailInitialLayout, setEmailInitialLayout] = useState<string | null>(null);
+  const [audienceModalOpen, setAudienceModalOpen] = useState(false);
 
   const maxStep = channel === "email" ? 5 : 4;
+
+  const reloadAudiences = useCallback(async () => {
+    const type = channel === "email" ? "email" : "phone";
+    const res = await fetch(`/api/audiences?type=${type}`);
+    const json = (await res.json()) as { audiences?: Audience[] };
+    if (json.audiences) {
+      setAudiences(json.audiences);
+      if (audienceId) {
+        const found = json.audiences.find((a) => a.id === audienceId);
+        if (found) setAudienceLabel(found.name);
+      }
+    }
+  }, [channel, audienceId]);
 
   const loadCampaign = useCallback(async (id: string) => {
     const res = await fetch(`/api/campaigns/${id}`);
@@ -292,19 +307,44 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
 
   useEffect(() => {
     if (step !== 2) return;
-    const type = channel === "email" ? "email" : "phone";
     let cancelled = false;
     async function loadAudiences() {
+      const type = channel === "email" ? "email" : "phone";
       const res = await fetch(`/api/audiences?type=${type}`);
       const json = (await res.json()) as { audiences?: Audience[] };
       if (!cancelled && json.audiences) {
         setAudiences(json.audiences);
-        if (audienceId) { const found = json.audiences.find((a) => a.id === audienceId); if (found) setAudienceLabel(found.name); }
+        if (audienceId) {
+          const found = json.audiences.find((a) => a.id === audienceId);
+          if (found) setAudienceLabel(found.name);
+        }
       }
     }
     void loadAudiences();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [step, audienceId, channel]);
+
+  function handleAudienceCreated(result: AudienceCreateResult) {
+    setAudienceModalOpen(false);
+    setAudienceId(result.id);
+    setAudienceLabel(result.name);
+    setAudiences((prev) => {
+      if (prev.some((a) => a.id === result.id)) return prev;
+      return [
+        { id: result.id, name: result.name, audience_type: channel === "email" ? "email" : "phone" },
+        ...prev,
+      ];
+    });
+    if (channel === "email") {
+      setEmailIncludeAll(true);
+      setEmailSelectedIds(new Set());
+      setMembersPage(1);
+      setMembersTotal(result.memberCount);
+    }
+    void reloadAudiences();
+  }
 
   useEffect(() => {
     const found = audiences.find((a) => a.id === audienceId);
@@ -437,17 +477,73 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
 
       {/* Step 2 */}
       {step === 2 && (
-        <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-ink">{channel === "email" ? tEmail("step2Title") : t("step2Title")}</h2>
-          <p className="text-sm text-ink-muted">{channel === "email" ? tEmail("step2Hint") : t("step2Hint")}</p>
-          <select value={audienceId} onChange={(e) => setAudienceId(e.target.value)} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm">
-            <option value="">{t("selectAudiencePlaceholder")}</option>
-            {audiences.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <Link href={channel === "email" ? "/dashboard/audience/emails" : "/dashboard/audience/phones"} className="inline-block text-sm font-medium text-accent hover:text-accent-hover">
-            {channel === "email" ? tEmail("manageEmails") : t("managePhones")}
-          </Link>
-        </div>
+        <>
+          <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <h2 className="text-sm font-semibold text-ink">
+              {channel === "email" ? tEmail("step2Title") : t("step2Title")}
+            </h2>
+            <p className="text-sm text-ink-muted">
+              {channel === "email" ? tEmail("step2Hint") : t("step2Hint")}
+            </p>
+
+            {audiences.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 px-4 py-8 text-center">
+                <p className="text-sm text-ink-muted">{t("audienceCreateEmptyHint")}</p>
+                <button
+                  type="button"
+                  onClick={() => setAudienceModalOpen(true)}
+                  className="mt-4 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-hover"
+                >
+                  {t("audienceCreateFirstList")}
+                </button>
+              </div>
+            ) : (
+              <>
+                <select
+                  value={audienceId}
+                  onChange={(e) => setAudienceId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">{t("selectAudiencePlaceholder")}</option>
+                  {audiences.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                {audienceId ? (
+                  <p className="text-xs text-ink-muted">
+                    {t("audienceCreateSelected", { name: audienceLabel || audiences.find((a) => a.id === audienceId)?.name || "" })}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAudienceModalOpen(true)}
+                    className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted"
+                  >
+                    {t("audienceCreateNewList")}
+                  </button>
+                  <Link
+                    href={channel === "email" ? "/dashboard/audience/emails" : "/dashboard/audience/phones"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-ink-muted hover:text-ink hover:underline"
+                  >
+                    {t("audienceCreateAdvanced")}
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+
+          <AudienceCreateModal
+            open={audienceModalOpen}
+            audienceType={channel === "email" ? "email" : "phone"}
+            onClose={() => setAudienceModalOpen(false)}
+            onComplete={handleAudienceCreated}
+          />
+        </>
       )}
 
       {/* Step 3 — SMS message */}

@@ -93,3 +93,46 @@ export async function POST(req: Request, ctx: Ctx) {
 
   return NextResponse.json({ ok: true, count: count ?? values.length });
 }
+
+export async function DELETE(req: Request, ctx: Ctx) {
+  const { id: audienceId } = await ctx.params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: aud, error: aErr } = await supabase
+    .from("audiences")
+    .select("id")
+    .eq("id", audienceId)
+    .single();
+
+  if (aErr || !aud) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let ids: string[] = [];
+  try {
+    const body = (await req.json()) as { ids?: string[] };
+    if (!Array.isArray(body.ids) || !body.ids.length) {
+      return NextResponse.json({ error: "ids[] required" }, { status: 400 });
+    }
+    ids = body.ids.filter((v) => typeof v === "string" && v.trim());
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("audience_members")
+    .delete()
+    .eq("audience_id", audienceId)
+    .in("id", ids);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { count } = await supabase
+    .from("audience_members")
+    .select("*", { count: "exact", head: true })
+    .eq("audience_id", audienceId);
+
+  return NextResponse.json({ ok: true, count: count ?? 0, deleted: ids.length });
+}

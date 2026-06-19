@@ -1,26 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
+import { formatAppDate } from "@/lib/i18n/format-app-date";
 
 type Row = { id: string; name: string; created_at: string; count: number };
 
-export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: Row[] }) {
+export function EmailsAudienceList({ initialAudiences, locale }: { initialAudiences: Row[]; locale: string }) {
   const t = useTranslations("emails");
-  const [audiences, setAudiences] = useState(initialAudiences);
-  const [selectedId, setSelectedId] = useState(initialAudiences[0]?.id ?? "");
-  const [newListName, setNewListName] = useState("");
-  const [bulkText, setBulkText] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
+  const [audiences] = useState(initialAudiences);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const selected = useMemo(() => audiences.find((a) => a.id === selectedId), [audiences, selectedId]);
-
-  async function createList() {
+  async function createAudience() {
     setError(null);
-    setMessage(null);
-    if (!newListName.trim()) {
+    if (!newName.trim()) {
       setError(t("nameListFirst"));
       return;
     }
@@ -29,25 +27,11 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
       const res = await fetch("/api/audiences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newListName.trim(), audience_type: "email" }),
+        body: JSON.stringify({ name: newName.trim(), audience_type: "email" }),
       });
-      const json = (await res.json()) as {
-        audience?: { id: string; name: string; created_at: string };
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error ?? t("createFailed"));
-      if (json.audience) {
-        const row: Row = {
-          id: json.audience.id,
-          name: json.audience.name,
-          created_at: json.audience.created_at,
-          count: 0,
-        };
-        setAudiences((prev) => [row, ...prev]);
-        setSelectedId(row.id);
-        setNewListName("");
-        setMessage(t("listCreated"));
-      }
+      const json = (await res.json()) as { audience?: { id: string }; error?: string };
+      if (!res.ok || !json.audience) throw new Error(json.error ?? t("createFailed"));
+      router.push(`/dashboard/audience/emails/${json.audience.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("createFailed"));
     } finally {
@@ -55,106 +39,104 @@ export function EmailsAudienceClient({ initialAudiences }: { initialAudiences: R
     }
   }
 
-  async function addEmails() {
-    setError(null);
-    setMessage(null);
-    if (!selectedId) {
-      setError(t("createListFirst"));
-      return;
-    }
-    const lines = bulkText
-      .split(/\r?\n/)
-      .flatMap((line) => line.split(/[,;]/))
-      .map((l) => l.trim())
-      .filter(Boolean);
-    if (!lines.length) {
-      setError(t("pasteEmails"));
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/audiences/${selectedId}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ values: lines }),
-      });
-      const json = (await res.json()) as { error?: string; count?: number };
-      if (!res.ok) throw new Error(json.error ?? t("addFailed"));
-      setBulkText("");
-      const total = json.count ?? 0;
-      setMessage(t("listUpdated", { count: total }));
-      setAudiences((prev) => prev.map((a) => (a.id === selectedId ? { ...a, count: total } : a)));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("addFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
-    <div className="space-y-8">
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">{t("newListTitle")}</h2>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <input
-            value={newListName}
-            onChange={(e) => setNewListName(e.target.value)}
-            placeholder={t("listPlaceholder")}
-            className="min-w-[200px] flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-          />
+    <>
+      {audiences.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
+          <p className="text-sm text-ink-muted">{t("emptyState")}</p>
           <button
             type="button"
-            disabled={busy}
-            onClick={() => void createList()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
+            onClick={() => setShowCreate(true)}
+            className="mt-6 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-hover"
           >
-            {t("createList")}
+            {t("createAudience")}
           </button>
         </div>
-      </div>
-
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">{t("addTitle")}</h2>
-        <p className="mt-1 text-xs text-ink-muted">{t("addHint")}</p>
-        <div className="mt-4 space-y-3">
-          <label className="block text-xs font-medium text-ink-muted">{t("targetList")}</label>
-          <select
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-          >
-            {audiences.length === 0 ? <option value="">{t("noLists")}</option> : null}
-            {audiences.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} ({a.count})
-              </option>
-            ))}
-          </select>
-          {selected ? (
-            <p className="text-xs text-ink-muted">
-              {t("selected")} <span className="font-medium text-ink">{selected.name}</span>
-            </p>
-          ) : null}
-          <textarea
-            value={bulkText}
-            onChange={(e) => setBulkText(e.target.value)}
-            rows={8}
-            placeholder={"hello@customer.com\nbuyer@example.org"}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm"
-          />
-          <button
-            type="button"
-            disabled={busy || !selectedId}
-            onClick={() => void addEmails()}
-            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium hover:bg-surface-muted disabled:opacity-60"
-          >
-            {t("addToList")}
-          </button>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+            >
+              {t("createAudience")}
+            </button>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+            <ul className="divide-y divide-zinc-100">
+              {audiences.map((a) => (
+                <li key={a.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{a.name}</p>
+                    <p className="mt-0.5 text-xs text-ink-muted">
+                      {t("listMeta", {
+                        count: a.count,
+                        date: formatAppDate(a.created_at, locale, "date"),
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/audience/emails/${a.id}`)}
+                    className="shrink-0 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-surface-muted"
+                  >
+                    {t("openList")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
+      )}
 
-      {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-    </div>
+      {showCreate ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-audience-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !busy) setShowCreate(false);
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
+            <h2 id="create-audience-title" className="text-base font-semibold text-ink">
+              {t("createAudience")}
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">{t("createAudienceHint")}</p>
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void createAudience();
+              }}
+              placeholder={t("listPlaceholder")}
+              className="mt-4 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none ring-accent/30 focus:ring-2"
+            />
+            {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setShowCreate(false)}
+                className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium hover:bg-surface-muted disabled:opacity-60"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void createAudience()}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
+              >
+                {busy ? t("creating") : t("createList")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

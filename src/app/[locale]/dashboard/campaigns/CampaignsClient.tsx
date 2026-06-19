@@ -144,6 +144,7 @@ export function CampaignsTable({
     phase: "running_warning" | "confirm";
   } | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [duplicateBusyId, setDuplicateBusyId] = useState<string | null>(null);
   const [startBusyId, setStartBusyId] = useState<string | null>(null);
 
   async function pauseCampaign(id: string) {
@@ -206,6 +207,21 @@ export function CampaignsTable({
       router.refresh();
     } finally {
       setDeleteBusyId(null);
+    }
+  }
+
+  async function duplicateCampaign(id: string) {
+    setDuplicateBusyId(id);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/duplicate`, { method: "POST" });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        alert(j.error ?? t("duplicateError"));
+        return;
+      }
+      router.refresh();
+    } finally {
+      setDuplicateBusyId(null);
     }
   }
 
@@ -463,6 +479,21 @@ export function CampaignsTable({
                           </button>
                         </>
                       ) : null}
+                      <button
+                        type="button"
+                        disabled={duplicateBusyId === c.id}
+                        onClick={() => void duplicateCampaign(c.id)}
+                        className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-50"
+                      >
+                        {duplicateBusyId === c.id ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <ButtonSpinner />
+                            {t("duplicating")}
+                          </span>
+                        ) : (
+                          t("duplicate")
+                        )}
+                      </button>
                       <button
                         type="button"
                         disabled={deleteBusyId === c.id}
