@@ -240,19 +240,41 @@ export async function executeCampaignLaunch(
 
     const maxRaw = process.env.EMAIL_LAUNCH_MAX_RECIPIENTS?.trim();
     const maxRecipients = maxRaw ? Number.parseInt(maxRaw, 10) : 0;
-    const emails =
+    const selectedEmails =
       Number.isFinite(maxRecipients) && maxRecipients > 0
         ? allEmails.slice(0, maxRecipients)
         : allEmails;
 
-    if (!emails.length) return { ok: false, error: "No recipient emails" };
+    if (!selectedEmails.length) return { ok: false, error: "No recipient emails" };
+
+    const { data: alreadySentRows, error: sentErr } = await supabase
+      .from("outbound_email")
+      .select("to_email")
+      .eq("campaign_id", campaignId)
+      .eq("status", "sent");
+    if (sentErr) return { ok: false, error: sentErr.message };
+
+    const alreadySent = new Set(
+      (alreadySentRows ?? [])
+        .map((row) => (row.to_email as string | null)?.trim().toLowerCase())
+        .filter((email): email is string => Boolean(email))
+    );
+    const emails = selectedEmails.filter((email) => !alreadySent.has(email.trim().toLowerCase()));
 
     const { error: delErr } = await supabase
       .from("outbound_email")
       .delete()
       .eq("campaign_id", campaignId)
-      .eq("status", "pending");
+      .in("status", ["pending", "sending"]);
     if (delErr) return { ok: false, error: delErr.message };
+
+    if (!emails.length) {
+      await supabase
+        .from("campaigns")
+        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .eq("id", campaignId);
+      return { ok: true, queued: 0 };
+    }
 
     const startAt = new Date();
     try {

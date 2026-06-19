@@ -17,8 +17,10 @@ export function renderDiscountCoupon(
   const s = getEmailStrings(data.language);
   const ctx = makeLayoutCtx(getLayoutStyle(layoutStyle), theme, font, w);
   const heroTitle = data.heroHeadline.trim() || s.discountOff(data.discountAmount);
+  const eyebrowText = data.eyebrowText?.trim() || s.exclusiveOffer;
+  const closingLine = data.closingLine?.trim() || s.dontLetOfferSlip;
 
-  const heroInner = `<p style="margin:0;font-size:12px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(s.exclusiveOffer)}</p>
+  const heroInner = `<p style="margin:0;font-size:12px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(eyebrowText)}</p>
     <h1 class="${EMAIL_H1_CLASS}" style="margin:12px 0 0;color:${ctx.heroTextColor};font-size:${ctx.heroFontSize}px;font-weight:${w.hero};line-height:1.1;letter-spacing:-1px;text-align:${ctx.heroAlign};font-family:${font.stackCss};">${esc(heroTitle)}</h1>
     <div style="margin:28px auto 0;display:inline-block;background-color:rgba(255,255,255,0.12);border:2px dashed rgba(255,255,255,0.5);border-radius:8px;padding:14px 32px;text-align:center;">
       <p style="margin:0;font-size:11px;font-weight:${w.label};text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.7);font-family:${font.stackCss};">${esc(s.useCode)}</p>
@@ -57,7 +59,7 @@ export function renderDiscountCoupon(
   const finalCta = `${sectionDivider()}
   <tr>
     <td style="padding:36px 40px;text-align:center;">
-      <p style="margin:0 0 20px;font-size:16px;color:${theme.text};font-weight:${w.closingLine};font-family:${font.stackCss};">${esc(s.dontLetOfferSlip)}</p>
+      <p style="margin:0 0 20px;font-size:16px;color:${theme.text};font-weight:${w.closingLine};font-family:${font.stackCss};">${esc(closingLine)}</p>
       ${ctx.ctaButton(data.ctaText, data.ctaUrl, w.cta)}
       <p style="margin:16px 0 0;font-size:13px;color:${theme.textMuted};font-family:${font.stackCss};">${s.useCodeAtCheckout(esc(data.couponCode))}</p>
     </td>

@@ -119,8 +119,15 @@ export async function transitionCampaign(
     patch.paused_reason_message = null;
   }
 
-  const { error: upErr } = await supabase.from("campaigns").update(patch).eq("id", campaignId);
+  const { data: updated, error: upErr } = await supabase
+    .from("campaigns")
+    .update(patch)
+    .eq("id", campaignId)
+    .eq("status", row.status)
+    .select("id")
+    .maybeSingle();
   if (upErr) return { ok: false, error: upErr.message };
+  if (!updated) return { ok: false, error: "Campaign status changed; refresh and try again." };
 
   return { ok: true, status: target };
 }

@@ -57,9 +57,11 @@ export type DiscountCouponData = {
   subjectLine: string;
   language: string;
   heroImageUrl?: string;
+  eyebrowText?: string;
   discountAmount: string;
   couponCode: string;
   heroHeadline: string;
+  closingLine?: string;
   ctaText: string;
   ctaUrl: string;
   redemptionSteps: string[];

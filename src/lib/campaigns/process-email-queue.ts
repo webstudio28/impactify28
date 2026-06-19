@@ -14,6 +14,7 @@ import { toCanonicalStatus } from "@/lib/campaigns/state-machine";
 
 const nowIso = () => new Date().toISOString();
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const EMAIL_CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
 
 type ResendBatchItemResult =
   | { ok: true; id: string | null; to: string }
@@ -162,6 +163,16 @@ export async function processDueOutboundEmail(
   const batchSizeRaw = process.env.EMAIL_BATCH_SIZE?.trim();
   const batchSize = Math.min(100, Math.max(1, Number.parseInt(batchSizeRaw ?? "100", 10) || 100));
   const ts = nowIso();
+  const staleClaimCutoff = new Date(Date.now() - EMAIL_CLAIM_TIMEOUT_MS).toISOString();
+
+  let staleClaimQuery = supabase
+    .from("outbound_email")
+    .update({ status: "pending", updated_at: ts })
+    .eq("status", "sending")
+    .lt("updated_at", staleClaimCutoff);
+  if (singleCampaignId) staleClaimQuery = staleClaimQuery.eq("campaign_id", singleCampaignId);
+  const { error: staleClaimErr } = await staleClaimQuery;
+  if (staleClaimErr) throw staleClaimErr;
 
   let running: { id: string; name: string | null; user_id: string | null }[] = [];
 
@@ -218,10 +229,23 @@ export async function processDueOutboundEmail(
     return { processed: 0, errors: [], campaignIds: [], campaignSummaries: [], nextCursor: cursor };
   }
 
-  const nextCursor = singleCampaignId ? cursor + batch.length : undefined;
+  const candidateIds = batch.map((row) => row.id as string);
+  const { data: claimedBatch, error: claimErr } = await supabase
+    .from("outbound_email")
+    .update({ status: "sending", updated_at: ts })
+    .in("id", candidateIds)
+    .eq("status", "pending")
+    .select("id, user_id, campaign_id, to_email, status");
+
+  if (claimErr) throw claimErr;
+  if (!claimedBatch?.length) {
+    return { processed: 0, errors: [], campaignIds: [], campaignSummaries: [], nextCursor: cursor };
+  }
+
+  const nextCursor = singleCampaignId ? cursor + claimedBatch.length : undefined;
 
   const userIds = Array.from(
-    new Set(batch.map((r) => r.user_id as string).filter((id): id is string => typeof id === "string" && id.length > 0))
+    new Set(claimedBatch.map((r) => r.user_id as string).filter((id): id is string => typeof id === "string" && id.length > 0))
   );
 
   const { data: profiles } = await supabase
@@ -259,8 +283,8 @@ export async function processDueOutboundEmail(
     return perCampaign.get(id)!;
   }
 
-  const byCampaign = new Map<string, typeof batch>();
-  for (const row of batch) {
+  const byCampaign = new Map<string, typeof claimedBatch>();
+  for (const row of claimedBatch) {
     const campaignId = row.campaign_id as string;
     if (!byCampaign.has(campaignId)) byCampaign.set(campaignId, []);
     byCampaign.get(campaignId)!.push(row);
@@ -273,7 +297,14 @@ export async function processDueOutboundEmail(
       .eq("id", campaignId)
       .maybeSingle();
     const canonical = statusRow ? toCanonicalStatus(statusRow.status as string) : null;
-    if (canonical !== "in_progress") continue;
+    if (canonical !== "in_progress") {
+      await supabase
+        .from("outbound_email")
+        .update({ status: "pending", updated_at: nowIso() })
+        .in("id", rows.map((row) => row.id as string))
+        .eq("status", "sending");
+      continue;
+    }
 
     const first = rows[0];
     const uid = first.user_id as string;
@@ -353,9 +384,9 @@ export async function processDueOutboundEmail(
         }
         continue;
       }
-      const stillPending = (pendingRows ?? []).filter((row) => row.status === "pending");
-      if (!stillPending.length) continue;
-      const suppressionHashes = stillPending.map((row) => hashDestination(row.to_email as string));
+      const stillClaimed = (pendingRows ?? []).filter((row) => row.status === "sending");
+      if (!stillClaimed.length) continue;
+      const suppressionHashes = stillClaimed.map((row) => hashDestination(row.to_email as string));
       const { data: suppressionRows, error: suppressionErr } = await supabase
         .from("suppression_list")
         .select("destination_hash")
@@ -363,7 +394,7 @@ export async function processDueOutboundEmail(
         .eq("channel", "email")
         .in("destination_hash", suppressionHashes);
       if (suppressionErr) {
-        for (const row of stillPending) {
+        for (const row of stillClaimed) {
           errors.push(`${row.id}: suppression check failed: ${suppressionErr.message}`);
           campaignTrack(campaignId).failed++;
           campaignTrack(campaignId).errors.push(`${row.to_email}: suppression check failed`);
@@ -373,7 +404,7 @@ export async function processDueOutboundEmail(
       const suppressed = new Set((suppressionRows ?? []).map((r) => r.destination_hash as string));
 
       const sendRows: BatchSendInput[] = [];
-      for (const row of stillPending) {
+      for (const row of stillClaimed) {
         const email = row.to_email as string;
         const digest = hashDestination(email);
         if (suppressed.has(digest)) {
@@ -388,18 +419,18 @@ export async function processDueOutboundEmail(
           continue;
         }
         sendRows.push({
-        rowId: row.id as string,
-        userId: uid,
-        campaignId,
-        to: row.to_email as string,
-        subject: content.subject,
-        html: injectTrackingForEmail({
-          html: content.html,
-          recipientId: row.id as string,
-          campaignId,
+          rowId: row.id as string,
           userId: uid,
-        }),
-      });
+          campaignId,
+          to: row.to_email as string,
+          subject: content.subject,
+          html: injectTrackingForEmail({
+            html: content.html,
+            recipientId: row.id as string,
+            campaignId,
+            userId: uid,
+          }),
+        });
       }
       if (!sendRows.length) continue;
 
@@ -545,7 +576,7 @@ export async function processDueOutboundEmail(
   }
 
   const campaignIds = Array.from(
-    new Set(batch.map((r) => r.campaign_id).filter((id): id is string => typeof id === "string" && id.length > 0))
+    new Set(claimedBatch.map((r) => r.campaign_id).filter((id): id is string => typeof id === "string" && id.length > 0))
   );
 
   const campaignSummaries: CampaignSendSummary[] = Array.from(perCampaign.entries())

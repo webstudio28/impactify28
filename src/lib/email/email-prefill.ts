@@ -35,6 +35,8 @@ export type EmailPrefillFormFields = {
   benefits: string[];
   urgencyMessage: string;
   countdownText: string;
+  couponEyebrowText: string;
+  couponClosingLine: string;
   discountAmount: string;
   couponCode: string;
   redemptionSteps: string[];
@@ -71,6 +73,8 @@ export function getEmailPrefillFields(templateType: EmailTemplateType): EmailPre
     benefits: ["", ""],
     urgencyMessage: "",
     countdownText: "",
+    couponEyebrowText: "",
+    couponClosingLine: "",
     discountAmount: "",
     couponCode: "",
     redemptionSteps: ["", "", ""],
@@ -107,6 +111,8 @@ export function getEmailPrefillFields(templateType: EmailTemplateType): EmailPre
         discountAmount: "15%",
         couponCode: "MAIDEN15",
         heroHeadline: "15% отстъпка за тениската Senjutsu",
+        couponEyebrowText: "Малък жест за феновете на Rock Bunker",
+        couponClosingLine: "Използвай кода, ако си харесаш нещо от колекцията.",
         redemptionSteps: [
           "Отвори продукта и избери размер.",
           "Добави в количката и въведи кода MAIDEN15.",

@@ -51,6 +51,8 @@ type FormFields = {
   benefits: string[];
   urgencyMessage: string;
   countdownText: string;
+  couponEyebrowText: string;
+  couponClosingLine: string;
   discountAmount: string;
   couponCode: string;
   redemptionSteps: string[];
@@ -75,6 +77,8 @@ function defaultFields(): FormFields {
     benefits: ["", ""],
     urgencyMessage: "",
     countdownText: "",
+    couponEyebrowText: "",
+    couponClosingLine: "",
     discountAmount: "",
     couponCode: "",
     redemptionSteps: ["", "", ""],
@@ -122,6 +126,8 @@ function fieldsFromData(data: EmailTemplateData): FormFields {
         discountAmount: data.discountAmount,
         couponCode: data.couponCode,
         heroHeadline: data.heroHeadline,
+        couponEyebrowText: data.eyebrowText ?? "",
+        couponClosingLine: data.closingLine ?? "",
         redemptionSteps: data.redemptionSteps.length ? data.redemptionSteps : ["", "", ""],
         products: data.products,
       };
@@ -159,9 +165,11 @@ function buildTemplateData(type: EmailTemplateType, f: FormFields): EmailTemplat
         templateType: "discount_coupon",
         ...base,
         ...(f.heroImageUrl.trim() ? { heroImageUrl: f.heroImageUrl.trim() } : {}),
+        ...(f.couponEyebrowText.trim() ? { eyebrowText: f.couponEyebrowText } : {}),
         discountAmount: f.discountAmount,
         couponCode: f.couponCode,
         heroHeadline: f.heroHeadline,
+        ...(f.couponClosingLine.trim() ? { closingLine: f.couponClosingLine } : {}),
         redemptionSteps: f.redemptionSteps.filter(Boolean),
         products: f.products,
       };
@@ -948,6 +956,16 @@ export function EmailBuilderStep({
               <EmailImprovementField field="heroHeadline" label={t("heroHeadline")} {...improvementProps}>
                 <input value={fields.heroHeadline} onChange={(e) => patch({ heroHeadline: e.target.value })} className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("couponHeroHeadlinePh")} />
               </EmailImprovementField>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-medium text-ink-muted">{t("couponEyebrowText")}</label>
+                  <input value={fields.couponEyebrowText} onChange={(e) => patch({ couponEyebrowText: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("couponEyebrowTextPh")} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-ink-muted">{t("couponClosingLine")}</label>
+                  <input value={fields.couponClosingLine} onChange={(e) => patch({ couponClosingLine: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder={t("couponClosingLinePh")} />
+                </div>
+              </div>
               <ListEditor items={fields.redemptionSteps} onChange={(v) => patch({ redemptionSteps: v })} max={5} label={t("redemptionSteps")} placeholder={t("redemptionStepsPh")} />
               <ProductsEditor products={fields.products} onChange={(p) => patch({ products: p })} max={cfg.maxProducts} tEmail={t as (key: string, values?: Record<string, string | number>) => string} />
             </div>

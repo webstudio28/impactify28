@@ -20,7 +20,9 @@ export async function syncQueuedCampaignsToCompleted(
         ? supabase.from("outbound_email").select("*", { count: "exact", head: true })
         : supabase.from("outbound_sms").select("*", { count: "exact", head: true });
 
-    const { count, error } = await pendingQuery.eq("campaign_id", id).eq("status", "pending");
+    const { count, error } = await pendingQuery
+      .eq("campaign_id", id)
+      .in("status", channel === "email" ? ["pending", "sending"] : ["pending"]);
 
     if (error) continue;
     if ((count ?? 0) === 0) {
