@@ -10,6 +10,7 @@ import {
   toCanonicalStatus,
 } from "@/lib/campaigns/status-client";
 import { campaignDeleteNeedsRunningConfirm } from "@/lib/campaigns/status-client";
+import { canEditCampaignContent } from "@/lib/campaigns/edit-policy";
 import { ButtonSpinner } from "@/components/ui/ButtonSpinner";
 
 export type CampaignRow = {
@@ -384,15 +385,7 @@ export function CampaignsTable({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex flex-wrap justify-end gap-2">
-                      {c.status === "draft" ? (
-                        <Link
-                          href={`/dashboard/campaigns/new?id=${c.id}`}
-                          className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"
-                        >
-                          {t("continue")}
-                        </Link>
-                      ) : null}
-                      {c.status === "rejected" ? (
+                      {canEditCampaignContent(c.status) ? (
                         <Link
                           href={`/dashboard/campaigns/new?id=${c.id}`}
                           className="inline-flex rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-ink shadow-sm transition hover:bg-surface-muted"

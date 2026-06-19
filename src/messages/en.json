@@ -309,6 +309,8 @@
     "next": "Next",
     "creating": "Creating…",
     "createCampaign": "Create campaign",
+    "submitForApproval": "Submit for approval",
+    "submitting": "Submitting…",
     "errorGeneric": "Error",
     "finalizeError": "Finalize failed",
     "dash": "—"

@@ -309,6 +309,8 @@
     "next": "Напред",
     "creating": "Създаване…",
     "createCampaign": "Създай кампания",
+    "submitForApproval": "Изпрати за одобрение",
+    "submitting": "Изпращане…",
     "errorGeneric": "Грешка",
     "finalizeError": "Финализирането неуспешно",
     "dash": "—"

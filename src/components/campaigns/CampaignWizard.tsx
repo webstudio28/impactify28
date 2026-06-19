@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { composeSmsBody } from "@/lib/sms/body";
 import { isOurShortUrl } from "@/lib/links/short-domain";
+import { canEditCampaignContent, isCampaignWizardEditMode } from "@/lib/campaigns/edit-policy";
 import type { EmailTemplateType, EmailTemplateData } from "@/lib/email/templates/types";
 import { parseTemplateData } from "@/lib/email/templates/render";
 import { AudienceCreateModal, type AudienceCreateResult } from "./AudienceCreateModal";
@@ -201,8 +202,10 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
   const [emailInitialEmphasis, setEmailInitialEmphasis] = useState<string | null>(null);
   const [emailInitialLayout, setEmailInitialLayout] = useState<string | null>(null);
   const [audienceModalOpen, setAudienceModalOpen] = useState(false);
+  const [campaignStatus, setCampaignStatus] = useState<string>("draft");
 
   const maxStep = channel === "email" ? 5 : 4;
+  const isEditMode = isCampaignWizardEditMode(campaignStatus);
 
   const reloadAudiences = useCallback(async () => {
     const type = channel === "email" ? "email" : "phone";
@@ -241,6 +244,7 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
       steps: { step_order: number; body: string; link_url: string | null; delay_after_previous_hours: number }[];
     };
     const c = data.campaign;
+    setCampaignStatus(c.status);
     setName(c.name);
     setAudienceId(c.audience_id ?? "");
     const ch: CampaignChannel = c.channel === "email" ? "email" : "sms";
@@ -249,7 +253,7 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
     const ids = Array.isArray(c.email_selected_member_ids) ? c.email_selected_member_ids : [];
     setEmailSelectedIds(new Set(ids.filter(Boolean)));
 
-    if (ch === "email" && (c.status === "draft" || c.status === "rejected")) {
+    if (ch === "email" && canEditCampaignContent(c.status)) {
       const templateData = parseTemplateData(c.email_template_data);
       if (templateData) {
         // New template-based campaign — go straight to builder step
@@ -392,17 +396,70 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
     if (!res.ok) throw new Error(json.error ?? t("saveMessagesFailed"));
   }
 
+  async function saveCurrentStep() {
+    if (!idParam) return;
+    if (step === 1) {
+      if (!name.trim()) throw new Error(t("nameRequired"));
+      await patchCampaign({ name: name.trim(), channel });
+    }
+    if (step === 2) {
+      if (!audienceId) throw new Error(channel === "email" ? tEmail("selectEmailAudience") : t("selectAudience"));
+      await patchCampaign({ audience_id: audienceId });
+    }
+    if (step === 3 && channel === "sms") {
+      const first = steps[0];
+      const valid = Boolean(composeSmsBody(first?.body ?? "", first?.link_url ?? "").trim());
+      if (!valid) throw new Error(t("addMessage"));
+      await saveSteps();
+    }
+    if (step === 3 && channel === "email") {
+      if (!emailIncludeAll && emailSelectedIds.size === 0) throw new Error(tEmail("pickRecipients"));
+      await patchCampaign({
+        email_include_all: emailIncludeAll,
+        email_selected_member_ids: emailIncludeAll ? [] : Array.from(emailSelectedIds),
+      });
+    }
+    if (step === 4 && channel === "email") {
+      if (!emailTemplateType) throw new Error(tEmail("selectTemplate"));
+      await patchCampaign({ email_template_type: emailTemplateType });
+    }
+  }
+
   async function goNext() {
     if (!idParam) return;
-    setError(null); setBusy(true);
+    setError(null);
+    setBusy(true);
     try {
-      if (step === 1) { if (!name.trim()) throw new Error(t("nameRequired")); await patchCampaign({ name: name.trim(), channel }); }
-      if (step === 2) { if (!audienceId) throw new Error(channel === "email" ? tEmail("selectEmailAudience") : t("selectAudience")); await patchCampaign({ audience_id: audienceId }); }
-      if (step === 3 && channel === "sms") { const first = steps[0]; const valid = Boolean(composeSmsBody(first?.body ?? "", first?.link_url ?? "").trim()); if (!valid) throw new Error(t("addMessage")); await saveSteps(); }
-      if (step === 3 && channel === "email") { if (!emailIncludeAll && emailSelectedIds.size === 0) throw new Error(tEmail("pickRecipients")); await patchCampaign({ email_include_all: emailIncludeAll, email_selected_member_ids: emailIncludeAll ? [] : Array.from(emailSelectedIds) }); }
-      if (step === 4 && channel === "email") { if (!emailTemplateType) throw new Error(tEmail("selectTemplate")); await patchCampaign({ email_template_type: emailTemplateType }); }
+      await saveCurrentStep();
       setStep((s) => Math.min(maxStep, s + 1));
-    } catch (e) { setError(e instanceof Error ? e.message : t("errorGeneric")); } finally { setBusy(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("errorGeneric"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitForApproval() {
+    if (!idParam) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await saveCurrentStep();
+      const res = await fetch(`/api/campaigns/${idParam}/finalize`, { method: "POST" });
+      const json = (await res.json()) as { error?: string; ok?: boolean };
+      if (!res.ok) throw new Error(json.error ?? t("finalizeFailed"));
+      try {
+        await fetch("/api/sms/process", { method: "POST" });
+      } catch {
+        /* optional */
+      }
+      router.push("/dashboard/campaigns");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("finalizeError"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function finalize() {
@@ -649,19 +706,49 @@ export function CampaignWizard({ emailPrefillEnabled = false }: CampaignWizardPr
 
       {/* Navigation — hidden at step 5 email (EmailBuilderStep has its own buttons) */}
       {!isBuilderStep && (
-        <div className="flex justify-between gap-3">
-          <button type="button" onClick={() => { setError(null); setStep((s) => Math.max(1, s - 1)); }} disabled={step === 1 || busy} className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink disabled:opacity-40">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setStep((s) => Math.max(1, s - 1));
+            }}
+            disabled={step === 1 || busy}
+            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink disabled:opacity-40"
+          >
             {t("back")}
           </button>
-          {step < maxStep ? (
-            <button type="button" onClick={() => void goNext()} disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60">
-              {busy ? t("saving") : t("next")}
-            </button>
-          ) : (
-            <button type="button" onClick={() => void finalize()} disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60">
-              {busy ? t("creating") : t("createCampaign")}
-            </button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {isEditMode ? (
+              <button
+                type="button"
+                onClick={() => void submitForApproval()}
+                disabled={busy}
+                className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:opacity-60"
+              >
+                {busy ? t("submitting") : t("submitForApproval")}
+              </button>
+            ) : null}
+            {step < maxStep ? (
+              <button
+                type="button"
+                onClick={() => void goNext()}
+                disabled={busy}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
+              >
+                {busy ? t("saving") : t("next")}
+              </button>
+            ) : !isEditMode ? (
+              <button
+                type="button"
+                onClick={() => void finalize()}
+                disabled={busy}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-60"
+              >
+                {busy ? t("creating") : t("createCampaign")}
+              </button>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

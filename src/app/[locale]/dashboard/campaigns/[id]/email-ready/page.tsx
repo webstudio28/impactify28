@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { EmailReadyClient } from "@/components/campaigns/EmailReadyClient";
+import { canEditCampaignContent } from "@/lib/campaigns/edit-policy";
 
 export default async function EmailReadyPage({
   params,
@@ -26,7 +27,7 @@ export default async function EmailReadyPage({
   if (error || !campaign) {
     redirect(`/${locale}/dashboard/campaigns`);
   }
-  if (campaign.channel !== "email" || (campaign.status !== "draft" && campaign.status !== "rejected")) {
+  if (campaign.channel !== "email" || !canEditCampaignContent(campaign.status as string)) {
     redirect(`/${locale}/dashboard/campaigns`);
   }
   const html = typeof campaign.email_html === "string" ? campaign.email_html.trim() : "";

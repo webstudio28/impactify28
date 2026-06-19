@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { EMAIL_FONTS } from "@/lib/email/fonts";
 import { deleteUserCampaign } from "@/lib/campaigns/delete-campaign";
+import { canEditCampaignContent } from "@/lib/campaigns/edit-policy";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -67,8 +68,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     .single();
 
   if (exErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.status !== "draft" && existing.status !== "rejected") {
-    return NextResponse.json({ error: "Only draft or rejected campaigns can be edited" }, { status: 400 });
+  if (!canEditCampaignContent(existing.status as string)) {
+    return NextResponse.json({ error: "This campaign cannot be edited in its current state" }, { status: 400 });
   }
 
   let payload: Record<string, unknown> = {};

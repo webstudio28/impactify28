@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isOurShortUrl, shortLinkPublicUrl } from "@/lib/links/short-domain";
 import { shortenUrl } from "@/lib/links/shorten";
+import { canEditCampaignContent } from "@/lib/campaigns/edit-policy";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,8 +29,8 @@ export async function POST(req: Request, ctx: Ctx) {
   if (cErr || !campaign || campaign.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (campaign.status !== "draft" && campaign.status !== "rejected") {
-    return NextResponse.json({ error: "Only draft or rejected campaigns can create links" }, { status: 400 });
+  if (!canEditCampaignContent(campaign.status as string)) {
+    return NextResponse.json({ error: "This campaign cannot be edited in its current state" }, { status: 400 });
   }
 
   let body: { url?: string };

@@ -4,6 +4,7 @@ import { renderEmailTemplate, parseTemplateData } from "@/lib/email/templates/re
 import { DEFAULT_THEME_KEY } from "@/lib/email/themes";
 import { EMAIL_FONTS, DEFAULT_EMAIL_FONT_KEY } from "@/lib/email/fonts";
 import { DEFAULT_EMAIL_EMPHASIS_PRESET, getEmphasisPreset } from "@/lib/email/typography-emphasis";
+import { canEditCampaignContent } from "@/lib/campaigns/edit-policy";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,8 +23,8 @@ export async function POST(req: Request, ctx: Ctx) {
     .single();
 
   if (cErr || !campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (campaign.status !== "draft" && campaign.status !== "rejected") {
-    return NextResponse.json({ error: "Only draft or rejected campaigns can be edited" }, { status: 400 });
+  if (!canEditCampaignContent(campaign.status as string)) {
+    return NextResponse.json({ error: "This campaign cannot be edited in its current state" }, { status: 400 });
   }
   if (campaign.channel !== "email") {
     return NextResponse.json({ error: "Not an email campaign" }, { status: 400 });

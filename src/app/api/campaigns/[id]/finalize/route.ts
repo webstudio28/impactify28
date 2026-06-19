@@ -3,10 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { composeSmsBody } from "@/lib/sms/body";
 import { renderEmailTemplate, parseTemplateData } from "@/lib/email/templates/render";
 import { DEFAULT_THEME_KEY } from "@/lib/email/themes";
+import { canSubmitCampaignForApproval } from "@/lib/campaigns/edit-policy";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-const SUBMITTABLE = new Set(["draft", "rejected"]);
 
 export async function POST(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -19,7 +18,7 @@ export async function POST(_req: Request, ctx: Ctx) {
   const { data: campaign, error: cErr } = await supabase.from("campaigns").select("*").eq("id", id).single();
 
   if (cErr || !campaign) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!SUBMITTABLE.has(campaign.status as string)) {
+  if (!canSubmitCampaignForApproval(campaign.status as string)) {
     return NextResponse.json({ error: "Campaign cannot be submitted for approval in its current state" }, { status: 400 });
   }
   if (!campaign.audience_id) {

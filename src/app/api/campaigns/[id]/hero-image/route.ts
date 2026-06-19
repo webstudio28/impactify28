@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canEditCampaignContent } from "@/lib/campaigns/edit-policy";
 
 const BUCKET = "campaign-hero-images";
 
@@ -28,8 +29,8 @@ export async function POST(req: Request, ctx: Ctx) {
   if (campaign.channel !== "email") {
     return NextResponse.json({ error: "Not an email campaign" }, { status: 400 });
   }
-  if (campaign.status !== "draft" && campaign.status !== "rejected") {
-    return NextResponse.json({ error: "Only draft or rejected campaigns can be edited" }, { status: 400 });
+  if (!canEditCampaignContent(campaign.status as string)) {
+    return NextResponse.json({ error: "This campaign cannot be edited in its current state" }, { status: 400 });
   }
 
   let form: FormData;
