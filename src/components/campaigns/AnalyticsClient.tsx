@@ -126,8 +126,9 @@ export function AnalyticsClient({ campaignId }: { campaignId: string }) {
             const openCount = Number(row.open_count ?? prev.counts.opened ?? 0);
             const clickCount = Number(row.click_count ?? prev.totalClicks);
             const sent = prev.counts.sent;
-            const ctrDenominator = prev.campaign.channel === "email" ? sent : prev.counts.total;
-            const ctr = ctrDenominator > 0 ? Math.round((clickCount / ctrDenominator) * 1000) / 10 : 0;
+            const ctrDenominator = sent;
+            const ctrRaw = ctrDenominator > 0 ? (clickCount / ctrDenominator) * 100 : 0;
+            const ctr = Math.min(100, Math.round(ctrRaw * 10) / 10);
             return {
               ...prev,
               counts: { ...prev.counts, opened: openCount },
@@ -161,7 +162,7 @@ export function AnalyticsClient({ campaignId }: { campaignId: string }) {
 
   const { counts, links, totalClicks, ctr, campaign } = data;
   const isEmail = campaign.channel === "email";
-  const ctrDenominator = isEmail ? counts.sent : counts.total;
+  const ctrDenominator = counts.sent;
 
   return (
     <div className="space-y-6">

@@ -85,9 +85,11 @@ export async function GET(_req: Request, ctx: Ctx) {
   const failedCount = failed ?? 0;
   const pendingCount = pending ?? 0;
   const openCount = Number(liveMetrics?.open_count ?? 0);
-  const clickCount = Math.max(Number(liveMetrics?.click_count ?? 0), shortLinkClicks);
-  const ctrDenominator = campaign.channel === "email" ? sentCount : total;
-  const ctr = ctrDenominator > 0 ? Math.round((clickCount / ctrDenominator) * 1000) / 10 : 0;
+  const liveClickCount = Number(liveMetrics?.click_count ?? 0);
+  const clickCount = linksWithClicks.length > 0 ? shortLinkClicks : liveClickCount;
+  const ctrDenominator = sentCount;
+  const ctrRaw = ctrDenominator > 0 ? (clickCount / ctrDenominator) * 100 : 0;
+  const ctr = Math.min(100, Math.round(ctrRaw * 10) / 10);
 
   return NextResponse.json({
     campaign,

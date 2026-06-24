@@ -2,6 +2,7 @@ import createMiddleware from "next-intl/middleware";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { routing } from "./i18n/routing";
+import { configuredShortLinkHost } from "./lib/links/short-domain";
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -73,8 +74,23 @@ async function refreshSupabaseSession(request: NextRequest, response: NextRespon
   return response;
 }
 
+function shortLinkRewrite(request: NextRequest): NextResponse | null {
+  const host =
+    request.headers.get("host")?.split(":")[0]?.toLowerCase().replace(/^www\./, "") ?? "";
+  const shortHost = configuredShortLinkHost().toLowerCase().replace(/^www\./, "");
+  if (host !== shortHost) return null;
+
+  const code = request.nextUrl.pathname.replace(/^\/+/, "").split("/")[0] ?? "";
+  if (!code || !/^[a-z0-9]+$/i.test(code)) return null;
+
+  return NextResponse.rewrite(new URL(`/api/l/${code}`, request.url));
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  const shortRewrite = shortLinkRewrite(request);
+  if (shortRewrite) return shortRewrite;
 
   if (pathname.startsWith("/api/cron")) {
     return NextResponse.next();

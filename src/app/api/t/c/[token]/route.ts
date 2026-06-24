@@ -41,20 +41,19 @@ export async function GET(_req: Request, ctx: Ctx) {
       stage: "redirect",
       payload: { target },
     });
-    await incrementLiveMetric(supabase, payload.cid, "click_count");
-    try {
-      const uniqueKey = `click_unique:${payload.rid}`;
-      const first = await redis.set(uniqueKey, "1", { nx: true, ex: 60 * 60 * 24 * 90 });
-      if (first) {
-        await incrementLiveMetric(supabase, payload.cid, "unique_click_count");
-      }
 
-      const shortCode = extractShortCodeFromUrl(target);
-      if (shortCode) {
-        await redis.incr(`clicks:${shortCode}`);
+    const shortCode = extractShortCodeFromUrl(target);
+    if (!shortCode) {
+      await incrementLiveMetric(supabase, payload.cid, "click_count");
+      try {
+        const uniqueKey = `click_unique:${payload.rid}`;
+        const first = await redis.set(uniqueKey, "1", { nx: true, ex: 60 * 60 * 24 * 90 });
+        if (first) {
+          await incrementLiveMetric(supabase, payload.cid, "unique_click_count");
+        }
+      } catch (e) {
+        console.error("[tracking/click] redis:", e instanceof Error ? e.message : e);
       }
-    } catch (e) {
-      console.error("[tracking/click] redis:", e instanceof Error ? e.message : e);
     }
   } catch (e) {
     console.error("[tracking/click]", e instanceof Error ? e.message : e);
