@@ -1,4 +1,5 @@
 import { createCampaignSalesToken } from "@/lib/sales/campaign-token";
+import { isOurShortUrl } from "@/lib/links/short-domain";
 
 function isHttpUrl(url: string): boolean {
   const t = url.trim();
@@ -31,7 +32,7 @@ function isOurTrackingUrl(url: string): boolean {
  */
 export function appendCampaignSalesParam(url: string, campaignId: string, userId: string): string {
   const raw = url?.trim();
-  if (!raw || !isHttpUrl(raw) || isOurTrackingUrl(raw)) return url;
+  if (!raw || !isHttpUrl(raw) || isOurTrackingUrl(raw) || isOurShortUrl(raw)) return url;
 
   try {
     const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;

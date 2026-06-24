@@ -1,11 +1,12 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PhonesAudienceClient } from "./ui";
+import { PhonesAudienceList } from "./ui";
 
 export default async function PhonesAudiencePage() {
   const t = await getTranslations("phones");
   const tHub = await getTranslations("audienceHub");
+  const locale = await getLocale();
   const supabase = await createClient();
   const { data: audiences } = await supabase
     .from("audiences")
@@ -32,7 +33,7 @@ export default async function PhonesAudiencePage() {
         <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-sm text-ink-muted">{t("subtitle")}</p>
       </div>
-      <PhonesAudienceClient initialAudiences={withCounts} />
+      <PhonesAudienceList initialAudiences={withCounts} locale={locale} />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { parseEmailInput } from "@/lib/audiences/parse-emails";
+import { parsePhoneInput } from "@/lib/audiences/parse-phones";
 import { ButtonSpinner } from "@/components/ui/ButtonSpinner";
 
 type AudienceType = "phone" | "email";
@@ -20,18 +21,6 @@ type Props = {
   onClose: () => void;
   onComplete: (result: AudienceCreateResult) => void;
 };
-
-function parsePhones(text: string): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const line of text.split(/\r?\n/)) {
-    const value = line.trim();
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    out.push(value);
-  }
-  return out;
-}
 
 export function AudienceCreateModal({ open, audienceType, onClose, onComplete }: Props) {
   const t = useTranslations("wizard");
@@ -95,7 +84,7 @@ export function AudienceCreateModal({ open, audienceType, onClose, onComplete }:
     setError(null);
     if (!audienceId) return;
     const values =
-      audienceType === "email" ? parseEmailInput(bulkText) : parsePhones(bulkText);
+      audienceType === "email" ? parseEmailInput(bulkText) : parsePhoneInput(bulkText);
     if (!values.length) {
       setError(
         audienceType === "email" ? t("audienceCreatePasteEmails") : t("audienceCreatePastePhones")

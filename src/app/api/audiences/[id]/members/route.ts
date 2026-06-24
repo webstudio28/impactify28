@@ -18,9 +18,6 @@ export async function GET(req: Request, ctx: Ctx) {
     .single();
 
   if (aErr || !aud) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (aud.audience_type !== "email") {
-    return NextResponse.json({ error: "Member listing is only supported for email audiences" }, { status: 400 });
-  }
 
   const { searchParams } = new URL(req.url);
   const page = Math.max(1, Math.floor(Number(searchParams.get("page")) || 1));
